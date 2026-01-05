@@ -145,6 +145,7 @@ cython_debug/
 
 # Project-specific
 data/*.db
+data/*.sqlite
 data/*.log
 data/*.csv
 data/cache/
