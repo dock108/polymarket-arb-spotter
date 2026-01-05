@@ -8,6 +8,7 @@ for the arbitrage event logging system.
 import unittest
 import tempfile
 import os
+import shutil
 from datetime import datetime
 from sqlite_utils import Database
 
@@ -30,8 +31,6 @@ class TestLogger(unittest.TestCase):
             os.remove(self.test_db_path)
         # Remove test directory and any subdirectories
         if os.path.exists(self.test_dir):
-            import shutil
-
             shutil.rmtree(self.test_dir)
 
     def test_init_db(self):
