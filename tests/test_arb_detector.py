@@ -4,7 +4,7 @@ Unit tests for arbitrage detection module.
 
 import unittest
 from datetime import datetime
-from app.core.arb_detector import ArbitrageDetector, ArbitrageOpportunity
+from app.core.arb_detector import ArbitrageDetector, ArbitrageOpportunity, ArbAlert
 from app.core.mock_data import MockDataGenerator
 
 
@@ -224,6 +224,215 @@ class TestArbitrageDetector(unittest.TestCase):
         self.assertEqual(d['expected_profit'], 20.0)
         self.assertEqual(d['risk_score'], 0.3)
         self.assertIn('detected_at', d)
+
+
+class TestArbAlert(unittest.TestCase):
+    """Test ArbAlert class and check_arbitrage method."""
+    
+    def setUp(self):
+        """Set up test fixtures."""
+        self.detector = ArbitrageDetector(db_path=":memory:")
+    
+    def test_arb_alert_dataclass(self):
+        """Test ArbAlert dataclass creation and to_dict."""
+        alert = ArbAlert(
+            profitable=True,
+            reason="Test reason",
+            metrics={'expected_profit_pct': 5.0, 'market_name': 'Test'}
+        )
+        
+        self.assertTrue(alert.profitable)
+        self.assertEqual(alert.reason, "Test reason")
+        self.assertEqual(alert.metrics['expected_profit_pct'], 5.0)
+        
+        d = alert.to_dict()
+        self.assertEqual(d['profitable'], True)
+        self.assertEqual(d['reason'], "Test reason")
+        self.assertIn('metrics', d)
+    
+    def test_check_arbitrage_profitable(self):
+        """Test check_arbitrage with profitable opportunity."""
+        # Market with sum_price = 0.80 < (1 - 0.02) = 0.98
+        market = {
+            'id': 'arb_market',
+            'name': 'Profitable Arbitrage Market',
+            'outcomes': [
+                {'name': 'Yes', 'price': 0.40, 'volume': 10000},
+                {'name': 'No', 'price': 0.40, 'volume': 10000}
+            ],
+        }
+        
+        alert = self.detector.check_arbitrage(market, fee_buffer=0.02)
+        
+        self.assertTrue(alert.profitable)
+        self.assertIn('Arbitrage opportunity', alert.reason)
+        self.assertEqual(alert.metrics['market_name'], 'Profitable Arbitrage Market')
+        self.assertAlmostEqual(alert.metrics['sum_price'], 0.80)
+        self.assertAlmostEqual(alert.metrics['prices']['yes_price'], 0.40)
+        self.assertAlmostEqual(alert.metrics['prices']['no_price'], 0.40)
+        self.assertIn('timestamp', alert.metrics)
+        self.assertGreater(alert.metrics['expected_profit_pct'], 0)
+    
+    def test_check_arbitrage_not_profitable(self):
+        """Test check_arbitrage with no opportunity."""
+        # Market with sum_price = 1.00 >= (1 - 0.02) = 0.98
+        market = {
+            'id': 'normal_market',
+            'name': 'Normal Market',
+            'outcomes': [
+                {'name': 'Yes', 'price': 0.50, 'volume': 10000},
+                {'name': 'No', 'price': 0.50, 'volume': 10000}
+            ],
+        }
+        
+        alert = self.detector.check_arbitrage(market, fee_buffer=0.02)
+        
+        self.assertFalse(alert.profitable)
+        self.assertIn('No arbitrage', alert.reason)
+        self.assertEqual(alert.metrics['expected_profit_pct'], 0.0)
+        self.assertEqual(alert.metrics['market_name'], 'Normal Market')
+        self.assertAlmostEqual(alert.metrics['sum_price'], 1.00)
+    
+    def test_check_arbitrage_with_high_sum(self):
+        """Test check_arbitrage when prices sum > 1."""
+        # Market with sum_price = 1.05 > 0.98
+        market = {
+            'id': 'high_sum_market',
+            'name': 'High Sum Market',
+            'outcomes': [
+                {'name': 'Yes', 'price': 0.55, 'volume': 10000},
+                {'name': 'No', 'price': 0.50, 'volume': 10000}
+            ],
+        }
+        
+        alert = self.detector.check_arbitrage(market, fee_buffer=0.02)
+        
+        self.assertFalse(alert.profitable)
+        self.assertAlmostEqual(alert.metrics['sum_price'], 1.05)
+    
+    def test_check_arbitrage_insufficient_outcomes(self):
+        """Test check_arbitrage with insufficient outcomes."""
+        market = {
+            'id': 'bad_market',
+            'name': 'Single Outcome Market',
+            'outcomes': [
+                {'name': 'Yes', 'price': 0.50, 'volume': 10000}
+            ],
+        }
+        
+        alert = self.detector.check_arbitrage(market, fee_buffer=0.02)
+        
+        self.assertFalse(alert.profitable)
+        self.assertIn('Insufficient outcomes', alert.reason)
+        self.assertEqual(alert.metrics['expected_profit_pct'], 0.0)
+    
+    def test_check_arbitrage_empty_outcomes(self):
+        """Test check_arbitrage with empty outcomes list."""
+        market = {
+            'id': 'empty_market',
+            'name': 'Empty Market',
+            'outcomes': [],
+        }
+        
+        alert = self.detector.check_arbitrage(market, fee_buffer=0.02)
+        
+        self.assertFalse(alert.profitable)
+        self.assertIn('Insufficient outcomes', alert.reason)
+    
+    def test_check_arbitrage_custom_fee_buffer(self):
+        """Test check_arbitrage with custom fee buffer."""
+        # With fee_buffer=0.10, threshold = 0.90
+        # sum_price = 0.85 < 0.90 should be profitable
+        market = {
+            'id': 'custom_fee_market',
+            'name': 'Custom Fee Market',
+            'outcomes': [
+                {'name': 'Yes', 'price': 0.42, 'volume': 10000},
+                {'name': 'No', 'price': 0.43, 'volume': 10000}
+            ],
+        }
+        
+        alert = self.detector.check_arbitrage(market, fee_buffer=0.10)
+        
+        self.assertTrue(alert.profitable)
+        self.assertAlmostEqual(alert.metrics['threshold'], 0.90)
+        self.assertAlmostEqual(alert.metrics['sum_price'], 0.85)
+    
+    def test_check_arbitrage_boundary_case_below_threshold(self):
+        """Test check_arbitrage at boundary just below threshold."""
+        # sum_price = 0.97, threshold = 0.98, should be profitable
+        market = {
+            'id': 'boundary_market',
+            'name': 'Boundary Market',
+            'outcomes': [
+                {'name': 'Yes', 'price': 0.485, 'volume': 10000},
+                {'name': 'No', 'price': 0.485, 'volume': 10000}
+            ],
+        }
+        
+        alert = self.detector.check_arbitrage(market, fee_buffer=0.02)
+        
+        self.assertTrue(alert.profitable)
+        self.assertAlmostEqual(alert.metrics['sum_price'], 0.97)
+    
+    def test_check_arbitrage_boundary_case_at_threshold(self):
+        """Test check_arbitrage at exact threshold."""
+        # sum_price = 0.98, threshold = 0.98, should NOT be profitable
+        market = {
+            'id': 'threshold_market',
+            'name': 'Threshold Market',
+            'outcomes': [
+                {'name': 'Yes', 'price': 0.49, 'volume': 10000},
+                {'name': 'No', 'price': 0.49, 'volume': 10000}
+            ],
+        }
+        
+        alert = self.detector.check_arbitrage(market, fee_buffer=0.02)
+        
+        self.assertFalse(alert.profitable)
+        self.assertAlmostEqual(alert.metrics['sum_price'], 0.98)
+    
+    def test_check_arbitrage_metrics_structure(self):
+        """Test that all required metrics are present."""
+        market = {
+            'id': 'metrics_test',
+            'name': 'Metrics Test Market',
+            'outcomes': [
+                {'name': 'Yes', 'price': 0.35, 'volume': 10000},
+                {'name': 'No', 'price': 0.35, 'volume': 10000}
+            ],
+        }
+        
+        alert = self.detector.check_arbitrage(market, fee_buffer=0.02)
+        
+        # Check all required metrics
+        self.assertIn('expected_profit_pct', alert.metrics)
+        self.assertIn('market_name', alert.metrics)
+        self.assertIn('prices', alert.metrics)
+        self.assertIn('timestamp', alert.metrics)
+        self.assertIn('sum_price', alert.metrics)
+        
+        # Check prices structure
+        self.assertIn('yes_price', alert.metrics['prices'])
+        self.assertIn('no_price', alert.metrics['prices'])
+    
+    def test_check_arbitrage_expected_profit_calculation(self):
+        """Test expected profit percentage calculation."""
+        # sum_price = 0.80, profit_margin = 0.20
+        # expected_profit_pct = (0.20 / 0.80) * 100 = 25%
+        market = {
+            'id': 'profit_calc_market',
+            'name': 'Profit Calc Market',
+            'outcomes': [
+                {'name': 'Yes', 'price': 0.40, 'volume': 10000},
+                {'name': 'No', 'price': 0.40, 'volume': 10000}
+            ],
+        }
+        
+        alert = self.detector.check_arbitrage(market, fee_buffer=0.02)
+        
+        self.assertTrue(alert.profitable)
+        self.assertAlmostEqual(alert.metrics['expected_profit_pct'], 25.0, places=1)
 
 
 if __name__ == '__main__':
