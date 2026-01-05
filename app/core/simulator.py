@@ -11,7 +11,7 @@ TODO: Add market replay functionality
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from enum import Enum
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Tuple
 import random
 import time
 
@@ -85,6 +85,12 @@ class MockTradeExecutor:
     - Price shift: Random price movement during execution
     - Limited book depth: Partial fills when depth is insufficient
     """
+    
+    # Thresholds for result determination
+    MIN_FILL_RATIO_THRESHOLD = 0.5  # Minimum fill ratio before DEPTH_TOO_THIN
+    ADVERSE_PRICE_MOVE_THRESHOLD = 0.01  # Price shift threshold for PRICE_MOVED_BEFORE_FILL
+    SIGNIFICANT_PRICE_MOVE_THRESHOLD = 0.005  # Minor price move threshold
+    SLIPPAGE_PENALTY_RATE = 2.0  # Penalty rate per unfilled percent
     
     def __init__(
         self,
@@ -165,7 +171,7 @@ class MockTradeExecutor:
         # 2. Slippage from partial fills (proportional to unfilled amount)
         if filled_amount < trade_amount:
             fill_ratio = filled_amount / trade_amount
-            slippage_cost_pct = (1 - fill_ratio) * 2  # 2% penalty per unfilled percent
+            slippage_cost_pct = (1 - fill_ratio) * self.SLIPPAGE_PENALTY_RATE
             adjusted_profit_pct -= slippage_cost_pct
         
         # 3. Apply fees
@@ -210,7 +216,7 @@ class MockTradeExecutor:
         filled_amount: float,
         trade_amount: float,
         adjusted_profit_pct: float
-    ) -> tuple[TradeResult, Optional[str]]:
+    ) -> Tuple[TradeResult, Optional[str]]:
         """
         Determine the trade result based on simulation parameters.
         
@@ -227,14 +233,14 @@ class MockTradeExecutor:
         """
         # Check depth first - if we couldn't fill enough, depth was too thin
         fill_ratio = filled_amount / trade_amount if trade_amount > 0 else 0
-        if fill_ratio < 0.5:  # Less than 50% fill
+        if fill_ratio < self.MIN_FILL_RATIO_THRESHOLD:
             return (
                 TradeResult.DEPTH_TOO_THIN,
                 f"Only {fill_ratio*100:.1f}% of order could be filled due to thin order book"
             )
         
-        # Check if price moved significantly before fill
-        if abs(price_shift_pct) > 0.01 and price_shift_pct > 0:  # >1% adverse price move
+        # Check if price moved significantly before fill (adverse price move)
+        if price_shift_pct > self.ADVERSE_PRICE_MOVE_THRESHOLD:
             if adjusted_profit_pct <= 0:
                 return (
                     TradeResult.PRICE_MOVED_BEFORE_FILL,
@@ -261,7 +267,7 @@ class MockTradeExecutor:
         
         # Default case: if profit is negative/zero but doesn't fit other categories
         # Determine most likely cause
-        if abs(price_shift_pct) > 0.005:
+        if abs(price_shift_pct) > self.SIGNIFICANT_PRICE_MOVE_THRESHOLD:
             return (
                 TradeResult.PRICE_MOVED_BEFORE_FILL,
                 f"Price movement of {price_shift_pct*100:.2f}% eliminated profit"
