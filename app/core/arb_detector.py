@@ -20,6 +20,30 @@ from app.core.logger import logger
 
 
 @dataclass
+class ArbAlert:
+    """
+    Structured alert for arbitrage detection.
+    
+    Attributes:
+        profitable: Whether an arbitrage opportunity exists
+        reason: Human-readable explanation of the alert
+        metrics: Dictionary containing detailed metrics about the opportunity
+    """
+    
+    profitable: bool
+    reason: str
+    metrics: Dict[str, Any]
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert alert to dictionary."""
+        return {
+            'profitable': self.profitable,
+            'reason': self.reason,
+            'metrics': self.metrics,
+        }
+
+
+@dataclass
 class ArbitrageOpportunity:
     """Represents a detected arbitrage opportunity."""
     
@@ -180,6 +204,118 @@ class ArbitrageDetector:
             )
         
         return None
+    
+    def check_arbitrage(
+        self,
+        market: Dict[str, Any],
+        fee_buffer: float = 0.02
+    ) -> ArbAlert:
+        """
+        Check a single market for arbitrage opportunity.
+        
+        Computes sum_price = yes_price + no_price and triggers an alert
+        if sum_price < (1 - fee_buffer).
+        
+        Args:
+            market: Market data dictionary containing 'outcomes' with 'price' values
+            fee_buffer: Buffer for fees (default: 0.02 = 2%)
+            
+        Returns:
+            ArbAlert with profitable flag, reason, and metrics including:
+            - expected_profit_pct: Expected profit percentage
+            - market_name: Name of the market
+            - prices: Dictionary of outcome prices (yes_price, no_price)
+            - timestamp: When the check was performed
+            - sum_price: Sum of all outcome prices
+        """
+        timestamp = datetime.now()
+        outcomes = market.get('outcomes', [])
+        market_name = market.get('name', 'Unknown Market')
+        
+        # Handle missing or insufficient outcomes
+        if len(outcomes) < 2:
+            return ArbAlert(
+                profitable=False,
+                reason="Insufficient outcomes for arbitrage analysis",
+                metrics={
+                    'expected_profit_pct': 0.0,
+                    'market_name': market_name,
+                    'prices': {},
+                    'timestamp': timestamp.isoformat(),
+                    'sum_price': 0.0,
+                }
+            )
+        
+        # Extract prices from outcomes
+        # Support both named outcomes (Yes/No) and positional outcomes
+        yes_price = None
+        no_price = None
+        
+        for outcome in outcomes:
+            outcome_name = outcome.get('name', '').lower()
+            price = outcome.get('price', 0.0)
+            if outcome_name == 'yes':
+                yes_price = price
+            elif outcome_name == 'no':
+                no_price = price
+        
+        # Fallback to positional if named outcomes not found
+        if yes_price is None and len(outcomes) >= 1:
+            yes_price = outcomes[0].get('price', 0.0)
+        if no_price is None and len(outcomes) >= 2:
+            no_price = outcomes[1].get('price', 0.0)
+        
+        # Ensure we have valid prices
+        if yes_price is None:
+            yes_price = 0.0
+        if no_price is None:
+            no_price = 0.0
+        
+        # Calculate sum of prices
+        sum_price = yes_price + no_price
+        
+        # Calculate threshold for arbitrage
+        threshold = 1.0 - fee_buffer
+        
+        # Build prices dictionary
+        prices = {
+            'yes_price': yes_price,
+            'no_price': no_price,
+        }
+        
+        # Check for arbitrage opportunity
+        if sum_price < threshold:
+            # Arbitrage opportunity exists
+            profit_margin = 1.0 - sum_price
+            expected_profit_pct = (profit_margin / sum_price) * 100 if sum_price > 0 else 0.0
+            
+            return ArbAlert(
+                profitable=True,
+                reason=f"Arbitrage opportunity: sum_price ({sum_price:.4f}) < threshold ({threshold:.4f})",
+                metrics={
+                    'expected_profit_pct': expected_profit_pct,
+                    'market_name': market_name,
+                    'prices': prices,
+                    'timestamp': timestamp.isoformat(),
+                    'sum_price': sum_price,
+                    'threshold': threshold,
+                    'profit_margin': profit_margin,
+                }
+            )
+        else:
+            # No arbitrage opportunity
+            return ArbAlert(
+                profitable=False,
+                reason=f"No arbitrage: sum_price ({sum_price:.4f}) >= threshold ({threshold:.4f})",
+                metrics={
+                    'expected_profit_pct': 0.0,
+                    'market_name': market_name,
+                    'prices': prices,
+                    'timestamp': timestamp.isoformat(),
+                    'sum_price': sum_price,
+                    'threshold': threshold,
+                }
+            )
     
     def _calculate_risk_score(self, market: Dict[str, Any], profit_margin: float) -> float:
         """
