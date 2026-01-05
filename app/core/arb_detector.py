@@ -106,23 +106,108 @@ class ArbitrageDetector:
         """
         Detect arbitrage opportunities from market data.
         
+        An arbitrage opportunity exists when the sum of prices for all
+        outcomes is less than 1.0 (two-way arbitrage for binary markets).
+        
         Args:
             market_data: List of market data dictionaries
             
         Returns:
             List of detected arbitrage opportunities
-            
-        TODO: Implement two-way arbitrage detection
-        TODO: Implement triangular arbitrage detection
-        TODO: Add filters for minimum profit threshold
         """
         opportunities = []
         logger.info(f"Analyzing {len(market_data)} markets for arbitrage opportunities")
         
-        # Placeholder logic
-        # TODO: Replace with actual arbitrage detection algorithms
+        for market in market_data:
+            opp = self._check_two_way_arbitrage(market)
+            if opp:
+                opportunities.append(opp)
+        
+        if opportunities:
+            logger.info(f"Found {len(opportunities)} arbitrage opportunities")
         
         return opportunities
+    
+    def _check_two_way_arbitrage(self, market: Dict[str, Any]) -> Optional[ArbitrageOpportunity]:
+        """
+        Check for two-way arbitrage in a binary market.
+        
+        Two-way arbitrage exists when sum of all outcome prices < 1.0,
+        allowing profit by buying all outcomes.
+        
+        Args:
+            market: Market data dictionary
+            
+        Returns:
+            ArbitrageOpportunity if found, None otherwise
+        """
+        outcomes = market.get('outcomes', [])
+        if len(outcomes) < 2:
+            return None
+        
+        # Calculate sum of prices
+        price_sum = sum(outcome.get('price', 0) for outcome in outcomes)
+        
+        # Arbitrage exists if sum < 1.0 (with some threshold to account for fees)
+        # Using 0.98 as threshold to ensure at least 2% profit
+        if price_sum < 0.98:
+            profit_margin = 1.0 - price_sum
+            expected_profit = profit_margin * 100  # Per $100 invested
+            expected_return_pct = (profit_margin / price_sum) * 100 if price_sum > 0 else 0
+            
+            positions = [
+                {
+                    'outcome': outcome['name'],
+                    'action': 'BUY',
+                    'price': outcome['price'],
+                    'volume': outcome.get('volume', 0)
+                }
+                for outcome in outcomes
+            ]
+            
+            return ArbitrageOpportunity(
+                market_id=market.get('id', 'unknown'),
+                market_name=market.get('name', 'Unknown Market'),
+                opportunity_type='two-way',
+                expected_profit=expected_profit,
+                expected_return_pct=expected_return_pct,
+                positions=positions,
+                detected_at=datetime.now(),
+                expires_at=datetime.fromisoformat(market['expires_at']) if market.get('expires_at') else None,
+                risk_score=self._calculate_risk_score(market, profit_margin)
+            )
+        
+        return None
+    
+    def _calculate_risk_score(self, market: Dict[str, Any], profit_margin: float) -> float:
+        """
+        Calculate a risk score for an arbitrage opportunity.
+        
+        Lower scores indicate lower risk (better opportunities).
+        
+        Args:
+            market: Market data dictionary
+            profit_margin: The profit margin of the opportunity
+            
+        Returns:
+            Risk score between 0.0 and 1.0
+        """
+        risk = 0.5  # Base risk
+        
+        # Lower risk for higher profit margins
+        if profit_margin > 0.1:
+            risk -= 0.2
+        elif profit_margin > 0.05:
+            risk -= 0.1
+        
+        # Lower risk for higher liquidity
+        liquidity = market.get('liquidity', 0)
+        if liquidity > 100000:
+            risk -= 0.2
+        elif liquidity > 50000:
+            risk -= 0.1
+        
+        return max(0.0, min(1.0, risk))
     
     def save_opportunity(self, opportunity: ArbitrageOpportunity):
         """
