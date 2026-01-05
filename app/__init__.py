@@ -1,0 +1,3 @@
+"""
+Polymarket Arbitrage Spotter Application
+"""

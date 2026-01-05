@@ -1,0 +1,34 @@
+# Polymarket Arbitrage Spotter - Requirements
+# Python 3.8+
+
+# Web UI Framework
+streamlit>=1.28.0
+
+# Data Processing
+pandas>=2.0.0
+numpy>=1.24.0
+
+# HTTP Client for API
+requests>=2.31.0
+
+# Database (SQLite is built-in, but we may want additional tools)
+# SQLite support is included in Python standard library
+
+# Utilities
+python-dateutil>=2.8.2
+
+# Development and Testing
+pytest>=7.4.0
+pytest-cov>=4.1.0
+
+# Code Quality
+black>=23.0.0
+flake8>=6.0.0
+mypy>=1.5.0
+
+# TODO: Add additional dependencies as needed:
+# - websocket-client for real-time data
+# - python-dotenv for environment variable management
+# - schedule for task scheduling
+# - prometheus-client for metrics export
+# - aiohttp for async API calls
