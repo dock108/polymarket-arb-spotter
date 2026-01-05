@@ -43,7 +43,9 @@ class MockDataGenerator:
         
         # Generate binary outcome market
         yes_price = random.uniform(0.3, 0.7)
-        no_price = 1.0 - yes_price + random.uniform(-0.05, 0.05)  # Introduce small inefficiency
+        # Introduce small inefficiency but keep within bounds
+        inefficiency = random.uniform(-0.02, 0.02)
+        no_price = max(0.01, min(0.99, 1.0 - yes_price + inefficiency))
         
         return {
             'id': market_id,

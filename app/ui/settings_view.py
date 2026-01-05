@@ -10,6 +10,7 @@ TODO: Implement theme customization
 
 import streamlit as st
 from typing import Dict, Any
+from datetime import datetime
 
 from app.core.config import Config, config
 from app.core.logger import logger
@@ -192,7 +193,7 @@ def render_settings_view():
         st.text("v0.1.0-alpha")
         
         st.write("**Last Updated**")
-        st.text("2024-01-05")
+        st.text(datetime.now().strftime("%Y-%m-%d"))
 
 
 def validate_settings(settings: Dict[str, Any]) -> bool:
