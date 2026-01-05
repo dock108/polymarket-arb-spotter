@@ -81,8 +81,8 @@ class TestNormalizeOrderbookFromJson(unittest.TestCase):
         # Best ask should be lowest ask price
         self.assertEqual(result.yes_best_ask, 0.55)
         # NO prices are derived from YES prices
-        self.assertEqual(result.no_best_bid, 0.45)  # 1 - 0.55
-        self.assertEqual(result.no_best_ask, 0.55)  # 1 - 0.45
+        self.assertEqual(result.no_best_bid, 0.45)  # 1 - 0.55 = 0.45
+        self.assertEqual(result.no_best_ask, 0.55)  # 1 - 0.45 = 0.55
         self.assertEqual(result.market_id, "test_market")
 
     def test_parse_empty_orderbook(self):

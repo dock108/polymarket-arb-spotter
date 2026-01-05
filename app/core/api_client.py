@@ -371,7 +371,7 @@ class PolymarketAPIClient:
                 subscribe_msg = {
                     "type": "subscribe",
                     "channel": "market",
-                    "assets_ids": [market_id],
+                    "asset_ids": [market_id],
                 }
                 ws.send(json.dumps(subscribe_msg))
 
