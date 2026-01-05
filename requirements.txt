@@ -13,6 +13,7 @@ requests>=2.31.0
 
 # Database (SQLite is built-in, but we may want additional tools)
 # SQLite support is included in Python standard library
+sqlite-utils>=3.35.0
 
 # Utilities
 python-dateutil>=2.8.2
