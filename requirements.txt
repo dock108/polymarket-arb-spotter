@@ -30,8 +30,10 @@ mypy>=1.5.0
 # Environment variables management
 python-dotenv>=1.0.0
 
+# WebSocket support for real-time data
+websocket-client>=1.6.0
+
 # TODO: Add additional dependencies as needed:
-# - websocket-client for real-time data
 # - schedule for task scheduling
 # - prometheus-client for metrics export
 # - aiohttp for async API calls
