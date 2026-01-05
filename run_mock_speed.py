@@ -25,6 +25,10 @@ from app.core.simulator import Simulator
 from app.core.arb_detector import ArbitrageDetector
 from app.core.mock_data import MockDataGenerator
 from app.core.logger import logger, setup_logger, init_db, log_event
+from app.core.config import get_config
+
+# Default log database path (can be overridden by config)
+DEFAULT_LOG_DB_PATH = "data/arb_logs.sqlite"
 
 
 def parse_arguments():
@@ -296,7 +300,13 @@ def main():
     print("Starting speed test...\n")
     
     start_time = datetime.now()
-    log_db_path = "data/arb_logs.sqlite"
+    
+    # Get log database path from config or use default
+    try:
+        config = get_config()
+        log_db_path = config.log_db_path
+    except Exception:
+        log_db_path = DEFAULT_LOG_DB_PATH
     
     try:
         if args.mode == 'speed':

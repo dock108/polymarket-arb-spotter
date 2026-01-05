@@ -161,15 +161,41 @@ class MockDataGenerator:
         Returns:
             Path to the saved file
         """
-        # Reset random seed for reproducibility
-        random.seed(self._seed)
-        original_counter = self.market_counter
-        self.market_counter = 0
+        # Use a separate Random instance for reproducible export
+        # This avoids modifying global random state
+        export_rng = random.Random(self._seed)
         
-        snapshots = self.generate_snapshots(count)
-        
-        # Restore original state
-        self.market_counter = original_counter
+        snapshots = []
+        for i in range(count):
+            # Generate snapshot using local random instance
+            market_id = f"market_{i + 1}"
+            
+            if export_rng.random() < self.arb_frequency:
+                # Create arbitrage opportunity
+                profit_margin = export_rng.uniform(0.03, 0.15)
+                base_price = (1.0 - profit_margin) / 2
+                variation = export_rng.uniform(-0.1, 0.1)
+                yes_price = max(0.01, min(0.99, base_price + variation))
+                no_price = max(0.01, min(0.99, base_price - variation))
+            else:
+                # Normal market
+                yes_price = export_rng.uniform(0.3, 0.7)
+                inefficiency = export_rng.uniform(-0.02, 0.02)
+                no_price = max(0.01, min(0.99, 1.0 - yes_price + inefficiency))
+            
+            snapshots.append({
+                'id': market_id,
+                'name': f"Mock Market {i + 1}",
+                'question': f"Will event {i + 1} occur?",
+                'outcomes': [
+                    {'name': 'Yes', 'price': yes_price, 'volume': export_rng.uniform(1000, 100000)},
+                    {'name': 'No', 'price': no_price, 'volume': export_rng.uniform(1000, 100000)}
+                ],
+                'created_at': datetime.now().isoformat(),
+                'expires_at': (datetime.now() + timedelta(days=export_rng.randint(1, 30))).isoformat(),
+                'volume': export_rng.uniform(10000, 1000000),
+                'liquidity': export_rng.uniform(5000, 500000)
+            })
         
         # Ensure directory exists
         path = Path(filepath)

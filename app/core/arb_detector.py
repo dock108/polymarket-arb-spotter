@@ -51,6 +51,9 @@ class ArbitrageOpportunity:
 class ArbitrageDetector:
     """Main arbitrage detection engine."""
     
+    # Constants for arbitrage detection
+    ARBITRAGE_THRESHOLD = 0.98  # Sum of prices must be below this for arbitrage
+    
     def __init__(self, db_path: str = "data/polymarket_arb.db"):
         """
         Initialize the arbitrage detector.
@@ -148,9 +151,8 @@ class ArbitrageDetector:
         # Calculate sum of prices
         price_sum = sum(outcome.get('price', 0) for outcome in outcomes)
         
-        # Arbitrage exists if sum < 1.0 (with some threshold to account for fees)
-        # Using 0.98 as threshold to ensure at least 2% profit
-        if price_sum < 0.98:
+        # Arbitrage exists if sum < threshold (to account for fees)
+        if price_sum < self.ARBITRAGE_THRESHOLD:
             profit_margin = 1.0 - price_sum
             expected_profit = profit_margin * 100  # Per $100 invested
             expected_return_pct = (profit_margin / price_sum) * 100 if price_sum > 0 else 0
