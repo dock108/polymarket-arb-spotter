@@ -246,9 +246,11 @@ class ArbitrageDetector:
                 }
             )
         
-        # Extract yes and no prices
-        yes_price = 0.0
-        no_price = 0.0
+        # Extract prices from outcomes
+        # Support both named outcomes (Yes/No) and positional outcomes
+        yes_price = None
+        no_price = None
+        
         for outcome in outcomes:
             outcome_name = outcome.get('name', '').lower()
             price = outcome.get('price', 0.0)
@@ -256,6 +258,18 @@ class ArbitrageDetector:
                 yes_price = price
             elif outcome_name == 'no':
                 no_price = price
+        
+        # Fallback to positional if named outcomes not found
+        if yes_price is None and len(outcomes) >= 1:
+            yes_price = outcomes[0].get('price', 0.0)
+        if no_price is None and len(outcomes) >= 2:
+            no_price = outcomes[1].get('price', 0.0)
+        
+        # Ensure we have valid prices
+        if yes_price is None:
+            yes_price = 0.0
+        if no_price is None:
+            no_price = 0.0
         
         # Calculate sum of prices
         sum_price = yes_price + no_price

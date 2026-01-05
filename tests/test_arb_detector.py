@@ -433,6 +433,26 @@ class TestArbAlert(unittest.TestCase):
         
         self.assertTrue(alert.profitable)
         self.assertAlmostEqual(alert.metrics['expected_profit_pct'], 25.0, places=1)
+    
+    def test_check_arbitrage_non_standard_outcome_names(self):
+        """Test check_arbitrage with non-standard outcome names (fallback to positional)."""
+        # Market with non-standard outcome names
+        market = {
+            'id': 'non_standard_market',
+            'name': 'Non-Standard Market',
+            'outcomes': [
+                {'name': 'Option A', 'price': 0.40, 'volume': 10000},
+                {'name': 'Option B', 'price': 0.40, 'volume': 10000}
+            ],
+        }
+        
+        alert = self.detector.check_arbitrage(market, fee_buffer=0.02)
+        
+        # Should still detect arbitrage using positional fallback
+        self.assertTrue(alert.profitable)
+        self.assertAlmostEqual(alert.metrics['sum_price'], 0.80)
+        self.assertAlmostEqual(alert.metrics['prices']['yes_price'], 0.40)
+        self.assertAlmostEqual(alert.metrics['prices']['no_price'], 0.40)
 
 
 if __name__ == '__main__':
