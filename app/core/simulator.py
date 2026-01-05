@@ -59,15 +59,13 @@ class Simulator:
             
         Returns:
             Simulation statistics
-            
-        TODO: Add real-time simulation mode
-        TODO: Add historical data replay
         """
         logger.info(f"Starting batch simulation: {num_markets} markets, batch size {batch_size}")
         self.stats['start_time'] = datetime.now()
         
         for i in range(0, num_markets, batch_size):
-            batch = self.data_generator.generate_markets(batch_size)
+            # Use generate_snapshots for potential arbitrage opportunities
+            batch = self.data_generator.generate_snapshots(batch_size)
             self.stats['markets_analyzed'] += len(batch)
             
             opportunities = self.detector.detect_opportunities(batch)
@@ -96,14 +94,12 @@ class Simulator:
             
         Returns:
             Speed test statistics
-            
-        TODO: Add memory profiling
-        TODO: Add CPU profiling
         """
         logger.info(f"Starting speed test for {duration_seconds} seconds")
         self.stats = {
             'markets_analyzed': 0,
             'opportunities_found': 0,
+            'total_profit': 0.0,
             'start_time': datetime.now(),
             'end_time': None
         }
@@ -111,11 +107,16 @@ class Simulator:
         end_time = datetime.now() + timedelta(seconds=duration_seconds)
         
         while datetime.now() < end_time:
-            batch = self.data_generator.generate_markets(10)
+            # Use generate_snapshots to get markets with potential arbitrage
+            batch = self.data_generator.generate_snapshots(10)
             self.stats['markets_analyzed'] += len(batch)
             
             opportunities = self.detector.detect_opportunities(batch)
             self.stats['opportunities_found'] += len(opportunities)
+            
+            for opp in opportunities:
+                self.detector.save_opportunity(opp)
+                self.stats['total_profit'] += opp.expected_profit
         
         self.stats['end_time'] = datetime.now()
         duration = (self.stats['end_time'] - self.stats['start_time']).total_seconds()
