@@ -26,9 +26,11 @@ black>=23.0.0
 flake8>=6.0.0
 mypy>=1.5.0
 
+# Environment variables management
+python-dotenv>=1.0.0
+
 # TODO: Add additional dependencies as needed:
 # - websocket-client for real-time data
-# - python-dotenv for environment variable management
 # - schedule for task scheduling
 # - prometheus-client for metrics export
 # - aiohttp for async API calls

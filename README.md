@@ -67,6 +67,17 @@ source venv/bin/activate  # On Windows: venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
+4. Configure environment variables (optional):
+```bash
+# Copy the example environment file
+cp .env.example .env
+
+# Edit .env with your preferred settings
+nano .env  # or use your favorite editor
+```
+
+See the [Configuration](#️-configuration) section below for details on all available environment variables.
+
 ## 🎮 Usage
 
 ### Running the Live Dashboard
@@ -123,19 +134,83 @@ pytest tests/test_arb_detector.py
 
 ## ⚙️ Configuration
 
-Configuration can be managed through:
+The application supports flexible configuration through multiple methods:
 
-1. **UI Settings Page**: Use the Settings page in the dashboard
-2. **Environment Variables**: Set environment variables for configuration
-3. **Code Configuration**: Modify `app/core/config.py`
+1. **Environment Variables** (Recommended): Create a `.env` file in the project root
+2. **UI Settings Page**: Use the Settings page in the dashboard
+3. **Code Configuration**: Modify `app/core/config.py` directly
 
-Key configuration options:
-- `api_endpoint`: Polymarket API endpoint
-- `api_key`: API key (if required)
-- `db_path`: SQLite database location
-- `min_profit_threshold`: Minimum profit to consider (default: 1%)
-- `max_stake`: Maximum stake per opportunity
-- `log_level`: Logging verbosity
+### Environment Variables
+
+The application uses `python-dotenv` to load configuration from a `.env` file. To get started:
+
+```bash
+# Copy the example file
+cp .env.example .env
+
+# Edit with your settings
+nano .env
+```
+
+#### Available Environment Variables
+
+**Arbitrage Detection Parameters:**
+- `MIN_PROFIT_PERCENT` - Minimum profit percentage to consider an opportunity (default: `1.0`)
+- `FEE_BUFFER_PERCENT` - Fee buffer percentage to account for transaction fees (default: `0.5`)
+- `MAX_STAKE` - Maximum stake per arbitrage opportunity in USD (default: `1000.0`)
+
+**Alert Configuration:**
+- `ALERT_METHOD` - Alert method: `"email"` or `"telegram"` (optional, leave empty to disable)
+- `TELEGRAM_API_KEY` - Telegram bot API key (required if `ALERT_METHOD=telegram`)
+- `EMAIL_SMTP_SERVER` - Email SMTP server address (required if `ALERT_METHOD=email`)
+  - Example: `smtp.gmail.com:587`
+
+**Database Configuration:**
+- `LOG_DB_PATH` - Path to the arbitrage logs database (default: `data/arb_logs.sqlite`)
+- `DB_PATH` - Path to the main application database (default: `data/polymarket_arb.db`)
+
+**API Configuration:**
+- `API_ENDPOINT` - Polymarket API endpoint (default: `https://api.polymarket.com`)
+- `API_KEY` - Polymarket API key (optional, if required by API)
+
+**Logging Configuration:**
+- `LOG_LEVEL` - Logging level: `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL` (default: `INFO`)
+- `LOG_FILE` - Path to log file (default: `data/polymarket_arb.log`)
+
+#### Example Configuration
+
+```bash
+# .env file example
+MIN_PROFIT_PERCENT=2.0
+FEE_BUFFER_PERCENT=0.75
+MAX_STAKE=5000.0
+
+ALERT_METHOD=telegram
+TELEGRAM_API_KEY=your_bot_token_here
+
+LOG_DB_PATH=data/arb_logs.sqlite
+LOG_LEVEL=INFO
+```
+
+### Accessing Configuration in Code
+
+The configuration is automatically loaded when the application starts. You can access it using the `get_config()` helper:
+
+```python
+from app.core.config import get_config
+
+config = get_config()
+print(f"Min profit: {config.min_profit_percent}%")
+print(f"Alert method: {config.alert_method}")
+```
+
+### Configuration Validation
+
+The configuration system automatically validates settings on startup and will:
+- Log errors for invalid values (negative profit thresholds, etc.)
+- Log warnings for incomplete alert configurations
+- Display a summary of loaded configuration values
+- Create required directories automatically
 
 ## 📊 Database Schema
 
