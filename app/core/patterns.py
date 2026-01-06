@@ -161,6 +161,8 @@ class EventCorrelationAnalyzer:
         labels_db_path: str = _DB_PATH,
         resolution_window_minutes: int = 60,
         price_stability_threshold: float = 0.01,
+        profitable_threshold: float = 0.02,
+        stability_consecutive_ticks: int = 3,
     ):
         """
         Initialize the event correlation analyzer.
@@ -170,16 +172,21 @@ class EventCorrelationAnalyzer:
             labels_db_path: Path to labels database
             resolution_window_minutes: Time window for tracking outcomes (default: 60 minutes)
             price_stability_threshold: Price change threshold for "resolution" (default: 0.01 = 1%)
+            profitable_threshold: Minimum price move to consider profitable (default: 0.02 = 2%)
+            stability_consecutive_ticks: Number of stable ticks needed for resolution (default: 3)
         """
         self.history_db_path = history_db_path
         self.labels_db_path = labels_db_path
         self.resolution_window_minutes = resolution_window_minutes
         self.price_stability_threshold = price_stability_threshold
+        self.profitable_threshold = profitable_threshold
+        self.stability_consecutive_ticks = stability_consecutive_ticks
 
         logger.info(
             f"EventCorrelationAnalyzer initialized: "
             f"resolution_window={resolution_window_minutes}m, "
-            f"stability_threshold={price_stability_threshold}"
+            f"stability_threshold={price_stability_threshold}, "
+            f"profitable_threshold={profitable_threshold}"
         )
 
     def analyze_patterns(
@@ -320,8 +327,8 @@ class EventCorrelationAnalyzer:
                 else initial_volume
             )
 
-            # Determine if signal was profitable (simple heuristic)
-            was_profitable = abs(max_move) > 0.02  # 2% move threshold
+            # Determine if signal was profitable (using configured threshold)
+            was_profitable = abs(max_move) > self.profitable_threshold
 
             return SignalOutcome(
                 signal_timestamp=label["timestamp"],
@@ -385,7 +392,6 @@ class EventCorrelationAnalyzer:
         time_to_resolution = None
         prev_price = initial_price
         stability_count = 0
-        stability_required = 3  # Need 3 consecutive stable ticks
 
         for tick in ticks:
             tick_time = self._parse_timestamp(tick["timestamp"])
@@ -402,7 +408,7 @@ class EventCorrelationAnalyzer:
             if time_to_resolution is None:
                 if abs(price - prev_price) < self.price_stability_threshold:
                     stability_count += 1
-                    if stability_count >= stability_required:
+                    if stability_count >= self.stability_consecutive_ticks:
                         time_to_resolution = (tick_time - signal_time).total_seconds() / 60
                 else:
                     stability_count = 0
@@ -513,11 +519,26 @@ class EventCorrelationAnalyzer:
         sorted_times = sorted(resolution_times)
         total = len(sorted_times)
 
-        # Create curve at specific time intervals
+        # Create curve at time intervals based on resolution window
+        # Use standard intervals up to the resolution window
         curve = []
-        time_points = [1, 5, 10, 15, 30, 45, 60]
+        if self.resolution_window_minutes <= 15:
+            time_points = [1, 5, 10, 15]
+        elif self.resolution_window_minutes <= 30:
+            time_points = [1, 5, 10, 15, 30]
+        elif self.resolution_window_minutes <= 60:
+            time_points = [1, 5, 10, 15, 30, 45, 60]
+        else:
+            # For longer windows, add intervals every 30 minutes
+            time_points = [1, 5, 10, 15, 30]
+            current = 60
+            while current <= self.resolution_window_minutes:
+                time_points.append(current)
+                current += 30
 
         for time_point in time_points:
+            if time_point > self.resolution_window_minutes:
+                break
             resolved_count = sum(1 for t in sorted_times if t <= time_point)
             resolved_pct = (resolved_count / total) * 100
             curve.append((time_point, resolved_pct))
@@ -540,7 +561,10 @@ class EventCorrelationAnalyzer:
     def _parse_timestamp(timestamp: str) -> Optional[datetime]:
         """Parse ISO format timestamp string to datetime."""
         try:
-            return datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
+            # Handle UTC 'Z' suffix by replacing only at the end
+            if timestamp.endswith("Z"):
+                timestamp = timestamp[:-1] + "+00:00"
+            return datetime.fromisoformat(timestamp)
         except (ValueError, AttributeError):
             return None
 
@@ -549,6 +573,9 @@ def create_analyzer(
     history_db_path: str = _HISTORY_DB_PATH,
     labels_db_path: str = _DB_PATH,
     resolution_window_minutes: int = 60,
+    price_stability_threshold: float = 0.01,
+    profitable_threshold: float = 0.02,
+    stability_consecutive_ticks: int = 3,
 ) -> EventCorrelationAnalyzer:
     """
     Convenience function to create an event correlation analyzer.
@@ -557,6 +584,9 @@ def create_analyzer(
         history_db_path: Path to market history database
         labels_db_path: Path to labels database
         resolution_window_minutes: Time window for tracking outcomes
+        price_stability_threshold: Price change threshold for resolution
+        profitable_threshold: Minimum price move to consider profitable
+        stability_consecutive_ticks: Number of stable ticks needed for resolution
 
     Returns:
         Configured EventCorrelationAnalyzer instance
@@ -570,4 +600,7 @@ def create_analyzer(
         history_db_path=history_db_path,
         labels_db_path=labels_db_path,
         resolution_window_minutes=resolution_window_minutes,
+        price_stability_threshold=price_stability_threshold,
+        profitable_threshold=profitable_threshold,
+        stability_consecutive_ticks=stability_consecutive_ticks,
     )
