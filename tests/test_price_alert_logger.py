@@ -16,6 +16,7 @@ from app.core.logger import (
     init_db,
     log_price_alert_event,
     fetch_recent_price_alerts,
+    fetch_recent,
 )
 
 
@@ -364,8 +365,6 @@ class TestPriceAlertLogger(unittest.TestCase):
         self.assertEqual(len(price_alerts), 1)
 
         # Verify arbitrage events table is still empty
-        from app.core.logger import fetch_recent
-
         arb_events = fetch_recent(db_path=self.test_db_path)
         self.assertEqual(len(arb_events), 0)
 

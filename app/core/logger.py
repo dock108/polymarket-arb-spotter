@@ -166,6 +166,23 @@ def log_event(data: Dict[str, Any], db_path: str = _DB_PATH) -> None:
         # Don't re-raise to allow continued processing
 
 
+def _get_table_columns(db: Database, table_name: str) -> List[str]:
+    """
+    Get column names for a table.
+
+    Args:
+        db: Database instance
+        table_name: Name of the table
+
+    Returns:
+        List of column names
+    """
+    columns = [
+        col[0] for col in db.execute(f"SELECT * FROM {table_name} LIMIT 0").description
+    ]
+    return columns
+
+
 def fetch_recent(limit: int = 100, db_path: str = _DB_PATH) -> List[Dict[str, Any]]:
     """
     Fetch the most recent arbitrage events from the database.
@@ -195,10 +212,7 @@ def fetch_recent(limit: int = 100, db_path: str = _DB_PATH) -> List[Dict[str, An
             return []
 
         # Get column names
-        columns = [
-            col[0]
-            for col in db.execute("SELECT * FROM arbitrage_events LIMIT 0").description
-        ]
+        columns = _get_table_columns(db, "arbitrage_events")
 
         return [dict(zip(columns, row)) for row in rows]
 
@@ -270,12 +284,7 @@ def fetch_recent_price_alerts(
             return []
 
         # Get column names
-        columns = [
-            col[0]
-            for col in db.execute(
-                "SELECT * FROM price_alert_events LIMIT 0"
-            ).description
-        ]
+        columns = _get_table_columns(db, "price_alert_events")
 
         return [dict(zip(columns, row)) for row in rows]
 
