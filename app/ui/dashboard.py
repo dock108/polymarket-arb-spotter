@@ -48,10 +48,7 @@ def render_dashboard():
     )
     
     # Store mode in session state
-    if 'mode' not in st.session_state:
-        st.session_state.mode = mode
-    else:
-        st.session_state.mode = mode
+    st.session_state.mode = mode
     
     # Render appropriate page
     if page == "Dashboard":
@@ -184,11 +181,6 @@ def render_dashboard_content():
                 generate_mock_data()
                 st.success("Mock data generated! Refresh to see results.")
                 st.rerun()
-        
-        with col2:
-            if st.button("🗑️ Clear Data"):
-                # Just show info - actual clearing would need implementation
-                st.warning("Clear data functionality - TODO")
     else:
         st.info("📡 Live Read-Only Mode - Monitoring Polymarket API (not yet implemented)")
     
@@ -388,6 +380,8 @@ def render_settings_view():
     """
     Render the settings page (read-only display of current config).
     """
+    import sys
+    
     st.title("⚙️ Settings")
     st.markdown("---")
     
