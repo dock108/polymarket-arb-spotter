@@ -172,11 +172,19 @@ def _get_table_columns(db: Database, table_name: str) -> List[str]:
 
     Args:
         db: Database instance
-        table_name: Name of the table
+        table_name: Name of the table (must be 'arbitrage_events' or 'price_alert_events')
 
     Returns:
         List of column names
+
+    Raises:
+        ValueError: If table_name is not in the allowed list
     """
+    # Whitelist of allowed table names to prevent SQL injection
+    allowed_tables = {"arbitrage_events", "price_alert_events"}
+    if table_name not in allowed_tables:
+        raise ValueError(f"Invalid table name: {table_name}")
+
     columns = [
         col[0] for col in db.execute(f"SELECT * FROM {table_name} LIMIT 0").description
     ]

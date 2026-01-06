@@ -368,6 +368,35 @@ class TestPriceAlertLogger(unittest.TestCase):
         arb_events = fetch_recent(db_path=self.test_db_path)
         self.assertEqual(len(arb_events), 0)
 
+    def test_helper_function_validates_table_name(self):
+        """Test that _get_table_columns validates table names to prevent SQL injection."""
+        from app.core.logger import _get_table_columns
+
+        # Initialize database
+        init_db(self.test_db_path)
+        db = Database(self.test_db_path)
+
+        # Valid table names should work
+        try:
+            columns = _get_table_columns(db, "arbitrage_events")
+            self.assertIsInstance(columns, list)
+        except ValueError:
+            self.fail("Valid table name 'arbitrage_events' raised ValueError")
+
+        try:
+            columns = _get_table_columns(db, "price_alert_events")
+            self.assertIsInstance(columns, list)
+        except ValueError:
+            self.fail("Valid table name 'price_alert_events' raised ValueError")
+
+        # Invalid table name should raise ValueError
+        with self.assertRaises(ValueError):
+            _get_table_columns(db, "invalid_table")
+
+        # SQL injection attempt should raise ValueError
+        with self.assertRaises(ValueError):
+            _get_table_columns(db, "arbitrage_events; DROP TABLE users;--")
+
 
 if __name__ == "__main__":
     unittest.main()
