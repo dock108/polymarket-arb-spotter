@@ -193,7 +193,8 @@ def _get_table_columns(db: Database, table_name: str) -> List[str]:
 
     Args:
         db: Database instance
-        table_name: Name of the table (must be in the allowed list)
+        table_name: Name of the table. Must be one of: 'arbitrage_events',
+                   'price_alert_events', 'depth_events', 'history_labels'
 
     Returns:
         List of column names

@@ -31,6 +31,10 @@ LABEL_TYPES = [
     "false signal",
 ]
 
+# UI display constants
+MAX_MARKET_DISPLAY_LENGTH = 30
+MAX_MARKET_ID_FILENAME_LENGTH = 10
+
 
 def render_replay_view():
     """
@@ -90,7 +94,7 @@ def render_replay_view():
 
     # Display selected parameters
     st.sidebar.info(
-        f"**Market:** {selected_market[:30]}...\n\n"
+        f"**Market:** {selected_market[:MAX_MARKET_DISPLAY_LENGTH]}...\n\n"
         f"**Range:** {start_date.date()} to {end_date.date()}"
     )
 
@@ -440,10 +444,14 @@ def _render_labels_tab(market_id: str, start_date: datetime, end_date: datetime)
         # Export option
         if st.button("📥 Export Labels to CSV"):
             csv = display_df.to_csv(index=False)
+            # Truncate market ID for filename to avoid overly long filenames
+            market_id_short = market_id[:MAX_MARKET_ID_FILENAME_LENGTH]
+            timestamp_str = datetime.now().strftime('%Y%m%d_%H%M%S')
+            filename = f"labels_{market_id_short}_{timestamp_str}.csv"
             st.download_button(
                 label="Download CSV",
                 data=csv,
-                file_name=f"labels_{market_id[:10]}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                file_name=filename,
                 mime="text/csv",
             )
 
