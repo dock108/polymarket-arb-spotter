@@ -37,14 +37,14 @@ def render_price_alerts_view():
             market_id = st.text_input(
                 "Market ID",
                 help="Enter the unique market identifier",
-                placeholder="e.g., market_123"
+                placeholder="e.g., market_123",
             )
 
         with col2:
             direction = st.selectbox(
                 "Direction",
                 ["above", "below"],
-                help="Alert when price goes above or below target"
+                help="Alert when price goes above or below target",
             )
 
         with col3:
@@ -55,7 +55,7 @@ def render_price_alerts_view():
                 value=0.5,
                 step=0.01,
                 format="%.4f",
-                help="Price threshold (0.0 - 1.0)"
+                help="Price threshold (0.0 - 1.0)",
             )
 
         submitted = st.form_submit_button("Add Alert", type="primary")
@@ -89,11 +89,19 @@ def render_price_alerts_view():
 
             # Select and rename columns
             display_cols = [
-                "id", "market_id", "direction", "target_price", "created_at"
+                "id",
+                "market_id",
+                "direction",
+                "target_price",
+                "created_at",
             ]
             df_display = df[display_cols].copy()
             df_display.columns = [
-                "Alert ID", "Market ID", "Direction", "Target Price", "Created At"
+                "Alert ID",
+                "Market ID",
+                "Direction",
+                "Target Price",
+                "Created At",
             ]
 
             # Format values
@@ -116,7 +124,7 @@ def render_price_alerts_view():
                 selected_alert_id = st.selectbox(
                     "Select Alert to Remove",
                     alert_ids,
-                    help="Choose an alert ID to remove"
+                    help="Choose an alert ID to remove",
                 )
 
             with col2:
@@ -165,7 +173,7 @@ def render_price_alerts_view():
                 "market_id",
                 "direction",
                 "target_price",
-                "trigger_price"
+                "trigger_price",
             ]
 
             # Filter to only include columns that exist
@@ -179,7 +187,7 @@ def render_price_alerts_view():
                 "market_id": "Market ID",
                 "direction": "Direction",
                 "target_price": "Target Price",
-                "trigger_price": "Trigger Price"
+                "trigger_price": "Trigger Price",
             }
             df_display.columns = [
                 column_names.get(col, col) for col in df_display.columns
@@ -230,7 +238,8 @@ def render_price_alerts_view():
 
     # Help Section
     with st.expander("ℹ️ Help & Information"):
-        st.markdown("""
+        st.markdown(
+            """
         **How to use Price Alerts:**
 
         1. **Add an Alert**: Enter a market ID, select direction (above/below),
@@ -251,7 +260,8 @@ def render_price_alerts_view():
 
         **Note:** This view manages alert configuration. To actually watch markets
         and trigger alerts, you need to run the price alert watcher service separately.
-        """)
+        """
+        )
 
     # Footer
     st.markdown("---")
@@ -263,6 +273,6 @@ if __name__ == "__main__":
     st.set_page_config(
         page_title="Price Alerts - Polymarket Arbitrage Spotter",
         page_icon="🔔",
-        layout="wide"
+        layout="wide",
     )
     render_price_alerts_view()

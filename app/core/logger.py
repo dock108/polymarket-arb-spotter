@@ -2,17 +2,11 @@
 Logging configuration and utilities for the Polymarket Arbitrage Spotter.
 
 Includes structured logging for arbitrage events using SQLite database.
-
-TODO: Add log rotation
-TODO: Add different log handlers (file, console, remote)
-TODO: Add log levels per module
-TODO: Implement performance logging
 """
 
 import logging
 import sys
 import threading
-import time
 from datetime import datetime
 from pathlib import Path
 from typing import Optional, List, Dict, Any, Callable

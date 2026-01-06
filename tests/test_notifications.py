@@ -374,7 +374,7 @@ class TestSendPriceAlert(unittest.TestCase):
         """Set up test fixtures."""
         # Import here to avoid circular imports
         from app.core.price_alerts import PriceAlert
-        
+
         self.PriceAlert = PriceAlert
 
         # Sample PriceAlert object

@@ -31,7 +31,9 @@ def render_dashboard():
 
     # Sidebar navigation
     st.sidebar.title("📊 Navigation")
-    page = st.sidebar.radio("Go to", ["Dashboard", "History", "Price Alerts", "Settings"])
+    page = st.sidebar.radio(
+        "Go to", ["Dashboard", "History", "Price Alerts", "Settings"]
+    )
 
     # Mode toggle in sidebar
     st.sidebar.markdown("---")
@@ -283,11 +285,11 @@ def render_history_view():
     st.title("📜 Opportunity History")
     st.markdown("---")
 
-    # Filters
+    # Filters (placeholder - not currently applied to results)
     col1, col2, col3 = st.columns(3)
 
     with col1:
-        time_range = st.selectbox(
+        _ = st.selectbox(
             "Time Range", ["All Time", "Last 24 Hours", "Last 7 Days", "Last 30 Days"]
         )
 
@@ -407,13 +409,12 @@ def render_settings_view():
     """
     Render the settings page (read-only display of current config).
     """
-    import sys
-
     st.title("⚙️ Settings")
     st.markdown("---")
 
     st.info(
-        "📖 Settings are currently read-only. Configure via environment variables or .env file."
+        "📖 Settings are currently read-only. Configure via environment "
+        "variables or .env file."
     )
 
     # API Configuration

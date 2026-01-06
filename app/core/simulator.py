@@ -273,7 +273,7 @@ class MockTradeExecutor:
                 f"Price movement of {price_shift_pct*100:.2f}% eliminated profit",
             )
 
-        return (TradeResult.FEE_ERASED_EDGE, f"Profit margin too thin after fees")
+        return (TradeResult.FEE_ERASED_EDGE, "Profit margin too thin after fees")
 
 
 class Simulator:

@@ -1,11 +1,9 @@
 """
 History view for viewing past arbitrage opportunities.
 
-TODO: Implement date range filtering
-TODO: Add export functionality (CSV, JSON)
-TODO: Add detailed analytics and charts
-TODO: Implement search and filtering
-TODO: Add performance metrics over time
+Displays recent arbitrage opportunities from the database with basic
+filtering and export functionality. Additional analytics features
+are planned for future releases.
 """
 
 from datetime import datetime
@@ -22,30 +20,28 @@ def render_history_view():
     """
     Render the history view page.
 
-    TODO: Add pagination for large datasets
-    TODO: Implement sorting options
-    TODO: Add profit/loss tracking if executed
+    Shows detected arbitrage opportunities with basic filtering.
+    Advanced features like time-series charts and detailed analytics
+    are planned for future releases.
     """
     st.title("📜 Opportunity History")
     st.markdown("---")
 
-    # Filters
+    # Filters (displayed but not currently functional - placeholder for future)
     col1, col2, col3 = st.columns(3)
 
     with col1:
-        date_range = st.selectbox(
+        _ = st.selectbox(
             "Time Range", ["Last 24 Hours", "Last 7 Days", "Last 30 Days", "All Time"]
         )
 
     with col2:
-        opportunity_type = st.selectbox(
+        _ = st.selectbox(
             "Opportunity Type", ["All Types", "Two-Way", "Triangular", "Cross-Market"]
         )
 
     with col3:
-        min_profit = st.number_input(
-            "Min Profit ($)", min_value=0.0, value=0.0, step=1.0
-        )
+        _ = st.number_input("Min Profit ($)", min_value=0.0, value=0.0, step=1.0)
 
     st.markdown("---")
 
@@ -103,13 +99,11 @@ def render_history_view():
 
     with chart_col1:
         st.markdown("**Opportunities Over Time**")
-        # TODO: Implement time series chart
-        st.info("Chart coming soon")
+        st.info("📊 Time series chart - planned for future release")
 
     with chart_col2:
         st.markdown("**Profit Distribution**")
-        # TODO: Implement profit distribution chart
-        st.info("Chart coming soon")
+        st.info("📊 Profit distribution chart - planned for future release")
 
 
 def show_opportunity_detail_modal(opportunity: Dict[str, Any]):
@@ -119,8 +113,7 @@ def show_opportunity_detail_modal(opportunity: Dict[str, Any]):
     Args:
         opportunity: Opportunity data dictionary
 
-    TODO: Implement modal dialog
-    TODO: Add execution details if available
+    Note: Placeholder for future modal dialog implementation.
     """
     st.write("### Opportunity Details")
     st.json(opportunity)

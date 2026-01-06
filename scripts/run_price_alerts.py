@@ -44,18 +44,18 @@ from app.core.config import get_config
 class PriceAlertRunner:
     """
     Runner for the price alert watcher system.
-    
+
     Manages the lifecycle of the watcher, including initialization,
     monitoring, retry logic, heartbeat, and graceful shutdown.
     """
-    
+
     # Class constants
     MAX_BACKOFF_SECONDS = 300.0  # 5 minutes maximum backoff
-    
+
     def __init__(self, log_level: str = "INFO"):
         """
         Initialize the price alert runner.
-        
+
         Args:
             log_level: Logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
         """
@@ -69,18 +69,18 @@ class PriceAlertRunner:
         self.max_retries = 5
         self.base_backoff = 2.0  # Base backoff time in seconds
         self.config = get_config()
-        
+
         # Setup signal handlers for graceful shutdown
         signal.signal(signal.SIGINT, self._signal_handler)
         signal.signal(signal.SIGTERM, self._signal_handler)
-        
+
         # Configure logger
         logger.setLevel(log_level.upper())
-    
+
     def _signal_handler(self, signum, frame):
         """
         Handle shutdown signals gracefully.
-        
+
         Args:
             signum: Signal number
             frame: Current stack frame
@@ -89,13 +89,13 @@ class PriceAlertRunner:
         logger.info(f"\n{signal_name} received. Shutting down gracefully...")
         self.stop()
         sys.exit(0)
-    
+
     def _alert_callback(self, alert: PriceAlert) -> None:
         """
         Callback function called when an alert is triggered.
-        
+
         Sends notifications and logs the triggered alert to the database.
-        
+
         Args:
             alert: PriceAlert object with triggered status
         """
@@ -106,28 +106,36 @@ class PriceAlertRunner:
                 f"{alert.direction} {alert.target_price:.4f} - "
                 f"Current: {alert.current_price:.4f}"
             )
-            
+
             # Send notification (handles errors gracefully)
             success = send_price_alert(alert)
-            
+
             if success:
                 logger.info(f"✓ Notification sent for alert: {alert.market_id}")
             else:
-                logger.info(f"ℹ️  Notification logged (or sending failed) for alert: {alert.market_id}")
-            
+                logger.info(
+                    f"ℹ️  Notification logged (or sending failed) for alert: {alert.market_id}"
+                )
+
             # Log the alert event to database
             try:
                 # Create unique alert ID using hash to avoid issues with special characters
-                alert_id_str = f"{alert.market_id}|{alert.direction}|{alert.target_price}"
+                alert_id_str = (
+                    f"{alert.market_id}|{alert.direction}|{alert.target_price}"
+                )
                 alert_id_hash = hashlib.sha256(alert_id_str.encode()).hexdigest()[:16]
-                
+
                 alert_event = {
                     "timestamp": alert.triggered_at or datetime.now(),
                     "alert_id": alert_id_hash,
                     "market_id": alert.market_id,
                     "direction": alert.direction,
                     "target_price": alert.target_price,
-                    "trigger_price": alert.current_price if alert.current_price is not None else float('nan'),
+                    "trigger_price": (
+                        alert.current_price
+                        if alert.current_price is not None
+                        else float("nan")
+                    ),
                     "mode": "live",
                     "latency_ms": 0,  # Could be calculated if needed
                 }
@@ -135,10 +143,10 @@ class PriceAlertRunner:
                 logger.debug(f"✓ Alert event logged to database")
             except Exception as e:
                 logger.error(f"Error logging alert event to database: {e}")
-        
+
         except Exception as e:
             logger.error(f"Error in alert callback: {e}", exc_info=True)
-    
+
     def _print_heartbeat(self) -> None:
         """
         Print heartbeat status message every 60 seconds.
@@ -148,7 +156,7 @@ class PriceAlertRunner:
             # Load current alert count
             alerts = list_alerts()
             alert_count = len(alerts)
-            
+
             # Print heartbeat
             timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             logger.info(
@@ -156,37 +164,37 @@ class PriceAlertRunner:
                 f"Monitoring {alert_count} alert(s) - "
                 f"Status: {'Running' if self.running else 'Stopped'}"
             )
-            
+
             self.last_heartbeat = current_time
-    
+
     def _initialize_api_client(self) -> bool:
         """
         Initialize the API client and check connection health.
-        
+
         Returns:
             True if initialization successful, False otherwise
         """
         try:
             logger.info("Initializing Polymarket API client...")
             self.api_client = PolymarketAPIClient()
-            
+
             # Health check
             logger.info("Performing API health check...")
             if not self.api_client.health_check():
                 logger.error("API health check failed")
                 return False
-            
+
             logger.info("✓ API client initialized and healthy")
             return True
-        
+
         except Exception as e:
             logger.error(f"Error initializing API client: {e}", exc_info=True)
             return False
-    
+
     def _initialize_watcher(self) -> bool:
         """
         Initialize the price alert watcher.
-        
+
         Returns:
             True if initialization successful, False otherwise
         """
@@ -194,24 +202,28 @@ class PriceAlertRunner:
             if not self.api_client:
                 logger.error("API client not initialized")
                 return False
-            
+
             # Load alerts to check if any exist
             alerts = list_alerts()
-            
+
             if not alerts:
-                logger.warning("No alerts found in storage. Add alerts before running the watcher.")
-                logger.info("You can add alerts using the UI or by calling add_alert() in Python.")
+                logger.warning(
+                    "No alerts found in storage. Add alerts before running the watcher."
+                )
+                logger.info(
+                    "You can add alerts using the UI or by calling add_alert() in Python."
+                )
                 return False
-            
+
             logger.info(f"Found {len(alerts)} alert(s) to monitor")
-            
+
             # Display alerts
             for alert in alerts:
                 logger.info(
                     f"  - {alert['market_id']}: "
                     f"{alert['direction']} {alert['target_price']:.4f}"
                 )
-            
+
             # Create watcher with callback
             logger.info("Creating price alert watcher...")
             self.watcher = PriceAlertWatcher(
@@ -219,57 +231,63 @@ class PriceAlertRunner:
                 alert_cooldown=self.config.notification_throttle_seconds,
                 on_alert_triggered=self._alert_callback,
             )
-            
+
             logger.info("✓ Watcher initialized successfully")
             return True
-        
+
         except Exception as e:
             logger.error(f"Error initializing watcher: {e}", exc_info=True)
             return False
-    
+
     def _calculate_backoff(self) -> float:
         """
         Calculate exponential backoff time.
-        
+
         Returns:
             Backoff time in seconds
         """
         # Exponential backoff: base * (2 ^ retry_count)
         # Capped at MAX_BACKOFF_SECONDS (5 minutes)
-        backoff = min(self.base_backoff * (2 ** self.retry_count), self.MAX_BACKOFF_SECONDS)
+        backoff = min(
+            self.base_backoff * (2**self.retry_count), self.MAX_BACKOFF_SECONDS
+        )
         return backoff
-    
+
     def start(self) -> None:
         """
         Start the price alert watcher system.
-        
+
         Implements retry logic with exponential backoff on failures.
         """
         logger.info("=" * 70)
         logger.info("Price Alert Watcher System")
         logger.info("=" * 70)
         logger.info(f"Log level: {self.log_level}")
-        logger.info(f"Alert method: {self.config.alert_method or 'Disabled (will log only)'}")
-        logger.info(f"Notification cooldown: {self.config.notification_throttle_seconds}s")
+        logger.info(
+            f"Alert method: {self.config.alert_method or 'Disabled (will log only)'}"
+        )
+        logger.info(
+            f"Notification cooldown: {self.config.notification_throttle_seconds}s"
+        )
         logger.info("=" * 70)
         logger.info("")
-        
+
         # Initialize database
         logger.info("Initializing database...")
         init_db()
         logger.info("✓ Database initialized")
-        
+
         # Main retry loop
         while self.retry_count < self.max_retries:
             try:
                 # Initialize API client
                 if not self._initialize_api_client():
                     raise RuntimeError("Failed to initialize API client")
-                
+
                 # Initialize watcher
                 if not self._initialize_watcher():
                     raise RuntimeError("Failed to initialize watcher")
-                
+
                 # Start the watcher
                 logger.info("Starting price alert watcher...")
                 self.running = True
@@ -279,37 +297,37 @@ class PriceAlertRunner:
                 logger.info("🔍 Monitoring markets for price alerts...")
                 logger.info("Press Ctrl+C to stop")
                 logger.info("")
-                
+
                 # Reset retry count on successful start
                 self.retry_count = 0
-                
+
                 # Monitoring loop
                 while self.running:
                     self._print_heartbeat()
                     time.sleep(1.0)  # Check every second
-                
+
                 # If we exit the loop normally, break the retry loop
                 break
-            
+
             except Exception as e:
                 logger.error(f"Error in watch loop: {e}", exc_info=True)
-                
+
                 # Clean up
                 if self.watcher:
                     try:
                         self.watcher.stop()
                     except Exception:
                         pass
-                
+
                 self.retry_count += 1
-                
+
                 if self.retry_count >= self.max_retries:
                     logger.error(
                         f"Maximum retry attempts ({self.max_retries}) reached. "
                         "Exiting."
                     )
                     break
-                
+
                 # Calculate backoff time
                 backoff = self._calculate_backoff()
                 logger.warning(
@@ -317,18 +335,18 @@ class PriceAlertRunner:
                     f"(Attempt {self.retry_count}/{self.max_retries})"
                 )
                 time.sleep(backoff)
-        
+
         logger.info("")
         logger.info("=" * 70)
         logger.info("Price Alert Watcher System Stopped")
         logger.info("=" * 70)
-    
+
     def stop(self) -> None:
         """
         Stop the price alert watcher system.
         """
         self.running = False
-        
+
         if self.watcher:
             try:
                 self.watcher.stop()
@@ -340,7 +358,7 @@ class PriceAlertRunner:
 def parse_args():
     """
     Parse command line arguments.
-    
+
     Returns:
         Parsed arguments
     """
@@ -348,7 +366,7 @@ def parse_args():
         description="Run the price alert watcher system",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    
+
     parser.add_argument(
         "--log-level",
         type=str,
@@ -356,14 +374,14 @@ def parse_args():
         choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
         help="Set logging level (default: INFO)",
     )
-    
+
     return parser.parse_args()
 
 
 def main():
     """Main entry point."""
     args = parse_args()
-    
+
     # Create and start the runner
     runner = PriceAlertRunner(log_level=args.log_level)
     runner.start()

@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-Live observer script for Polymarket arbitrage opportunities.
+Live observer script for Polymarket arbitrage opportunities (CLI mode).
 
-This script:
+This script runs a command-line observer that:
 1. Connects to Polymarket streams (via WebSocket or API polling)
 2. Detects arbitrage opportunities in real-time
 3. Sends alerts via configured notification method
@@ -10,8 +10,10 @@ This script:
 5. Logs everything to database
 6. NEVER TRADES - detection only!
 
+Note: For the interactive UI dashboard, use `streamlit run run_live.py` instead.
+
 Usage:
-    python scripts/run_live.py [OPTIONS]
+    python scripts/run_live_observer.py [OPTIONS]
 
 Options:
     --mode {stream,poll}          Connection mode (default: poll)
@@ -24,13 +26,13 @@ Options:
 
 Example:
     # Run with polling (default, safe)
-    python scripts/run_live.py --poll-interval 60
+    python scripts/run_live_observer.py --poll-interval 60
 
     # Run with WebSocket streaming (requires websocket-client)
-    python scripts/run_live.py --mode stream
+    python scripts/run_live_observer.py --mode stream
 
     # Run for limited duration with mock trades disabled
-    python scripts/run_live.py --duration 300 --no-mock-trades
+    python scripts/run_live_observer.py --duration 300 --no-mock-trades
 """
 
 import os
@@ -536,19 +538,19 @@ def main():
         epilog="""
 Examples:
   # Run with default settings (poll mode, 30s interval)
-  python scripts/run_live.py
+  python scripts/run_live_observer.py
   
   # Run with custom poll interval
-  python scripts/run_live.py --poll-interval 60
+  python scripts/run_live_observer.py --poll-interval 60
   
   # Run for 5 minutes with alerts
-  python scripts/run_live.py --duration 300
+  python scripts/run_live_observer.py --duration 300
   
   # Run in stream mode (requires WebSocket)
-  python scripts/run_live.py --mode stream
+  python scripts/run_live_observer.py --mode stream
   
   # Run without mock trade simulation
-  python scripts/run_live.py --no-mock-trades
+  python scripts/run_live_observer.py --no-mock-trades
 
 Note: This system NEVER executes real trades. It is for detection only.
         """,

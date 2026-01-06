@@ -39,43 +39,45 @@ def main():
     print("Price Alert Watcher Example (Mock Mode)")
     print("=" * 70)
     print()
-    
+
     # Create a mock API client
     print("Creating mock API client...")
     mock_api_client = MagicMock()
     mock_api_client.stop_websocket = MagicMock()
     print("✅ Mock API client created\n")
-    
+
     # Add example alerts
     print("Adding example alerts...")
-    
+
     alert1_id = add_alert(
         market_id="trump_2024",
         direction="above",
         target_price=0.65,
     )
     print(f"  ✓ Added alert: Trump 2024 above 0.65")
-    
+
     alert2_id = add_alert(
         market_id="btc_100k",
         direction="below",
         target_price=0.35,
     )
     print(f"  ✓ Added alert: BTC 100K below 0.35")
-    
+
     alert3_id = add_alert(
         market_id="eth_10k",
         direction="above",
         target_price=0.50,
     )
     print(f"  ✓ Added alert: ETH 10K above 0.50")
-    
+
     # List all alerts
     print("\nCurrent alerts:")
     alerts = list_alerts()
     for alert in alerts:
-        print(f"  - {alert['market_id']}: {alert['direction']} {alert['target_price']:.4f}")
-    
+        print(
+            f"  - {alert['market_id']}: {alert['direction']} {alert['target_price']:.4f}"
+        )
+
     # Create the watcher
     print("\nCreating price alert watcher...")
     watcher = PriceAlertWatcher(
@@ -84,15 +86,15 @@ def main():
         on_alert_triggered=alert_callback,
     )
     print("✅ Watcher created\n")
-    
+
     # Simulate monitoring
     print("=" * 70)
     print("Simulating Real-Time Price Monitoring")
     print("=" * 70)
     print()
-    
+
     watcher._running = True
-    
+
     # Scenario 1: Trump market moves above threshold
     print("📊 Update 1: Trump 2024 market update")
     orderbook1 = NormalizedOrderBook(
@@ -103,7 +105,7 @@ def main():
     print(f"   Price: {orderbook1.yes_best_ask:.4f} (Target: 0.65)")
     watcher._handle_price_update("trump_2024", orderbook1)
     time.sleep(0.5)
-    
+
     # Scenario 2: BTC market stays above threshold (no alert)
     print("📊 Update 2: BTC 100K market update")
     orderbook2 = NormalizedOrderBook(
@@ -114,7 +116,7 @@ def main():
     print(f"   Price: {orderbook2.yes_best_ask:.4f} (Target: below 0.35)")
     watcher._handle_price_update("btc_100k", orderbook2)
     time.sleep(0.5)
-    
+
     # Scenario 3: ETH market crosses threshold
     print("📊 Update 3: ETH 10K market update")
     orderbook3 = NormalizedOrderBook(
@@ -125,7 +127,7 @@ def main():
     print(f"   Price: {orderbook3.yes_best_ask:.4f} (Target: 0.50)")
     watcher._handle_price_update("eth_10k", orderbook3)
     time.sleep(0.5)
-    
+
     # Scenario 4: Trump market still above threshold (duplicate prevention)
     print("📊 Update 4: Trump 2024 market update (duplicate)")
     orderbook4 = NormalizedOrderBook(
@@ -137,7 +139,7 @@ def main():
     print("   ⏱️  Alert in cooldown period - should not fire")
     watcher._handle_price_update("trump_2024", orderbook4)
     time.sleep(0.5)
-    
+
     # Scenario 5: BTC market drops below threshold
     print("📊 Update 5: BTC 100K market update")
     orderbook5 = NormalizedOrderBook(
@@ -148,11 +150,11 @@ def main():
     print(f"   Price: {orderbook5.yes_best_ask:.4f} (Target: below 0.35)")
     watcher._handle_price_update("btc_100k", orderbook5)
     time.sleep(0.5)
-    
+
     # Scenario 6: Wait for cooldown to expire, then trigger again
     print("\n⏱️  Waiting for cooldown period to expire (2 seconds)...")
     time.sleep(2.5)
-    
+
     print("📊 Update 6: Trump 2024 market update (after cooldown)")
     orderbook6 = NormalizedOrderBook(
         yes_best_bid=0.74,
@@ -163,7 +165,7 @@ def main():
     print("   ✅ Cooldown expired - alert should fire again")
     watcher._handle_price_update("trump_2024", orderbook6)
     time.sleep(0.5)
-    
+
     # Summary
     print("\n" + "=" * 70)
     print("Summary")
@@ -177,14 +179,14 @@ def main():
     print("Duplicate prevention:")
     print("  ✅ Trump 2024 duplicate blocked during cooldown")
     print()
-    
+
     # Clean up
     print("Cleaning up...")
     remove_alert(alert1_id)
     remove_alert(alert2_id)
     remove_alert(alert3_id)
     print("✅ Alerts removed")
-    
+
     print("\n" + "=" * 70)
     print("Example complete!")
     print("=" * 70)

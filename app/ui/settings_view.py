@@ -1,11 +1,9 @@
 """
 Settings view for configuring the arbitrage spotter.
 
-TODO: Implement configuration persistence
-TODO: Add API key management
-TODO: Add notification settings
-TODO: Add detection parameter tuning
-TODO: Implement theme customization
+Note: This is a placeholder UI. Full settings persistence will be
+implemented in a future version. Currently displays configuration
+values from .env file but changes are not saved.
 """
 
 from datetime import datetime
@@ -21,9 +19,8 @@ def render_settings_view():
     """
     Render the settings page.
 
-    TODO: Add validation for all settings
-    TODO: Implement save/load configuration
-    TODO: Add reset to defaults option
+    Currently displays configuration values but does not persist changes.
+    Settings must be modified in .env file and application restarted.
     """
     st.title("⚙️ Settings")
     st.markdown("---")
@@ -31,11 +28,12 @@ def render_settings_view():
     # API Configuration
     st.subheader("API Configuration")
 
-    api_endpoint = st.text_input(
+    # Note: Values are displayed but not currently persisted
+    _ = st.text_input(
         "API Endpoint", value=config.api_endpoint, help="Polymarket API endpoint URL"
     )
 
-    api_key = st.text_input(
+    _ = st.text_input(
         "API Key (Optional)",
         value=config.api_key or "",
         type="password",
@@ -50,18 +48,21 @@ def render_settings_view():
     col1, col2 = st.columns(2)
 
     with col1:
-        min_profit_threshold = st.number_input(
+        _ = st.number_input(
             "Minimum Profit Threshold",
             min_value=0.0,
             max_value=1.0,
             value=config.min_profit_threshold,
             step=0.001,
             format="%.3f",
-            help="Minimum profit percentage to consider an opportunity (e.g., 0.01 = 1%)",
+            help=(
+                "Minimum profit percentage to consider an opportunity "
+                "(e.g., 0.01 = 1%)"
+            ),
         )
 
     with col2:
-        max_stake = st.number_input(
+        _ = st.number_input(
             "Maximum Stake ($)",
             min_value=0.0,
             value=config.max_stake,
@@ -74,7 +75,7 @@ def render_settings_view():
     # Database Configuration
     st.subheader("Database Configuration")
 
-    db_path = st.text_input(
+    _ = st.text_input(
         "Database Path", value=config.db_path, help="Path to SQLite database file"
     )
 
@@ -86,7 +87,7 @@ def render_settings_view():
     col1, col2 = st.columns(2)
 
     with col1:
-        log_level = st.selectbox(
+        _ = st.selectbox(
             "Log Level",
             ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
             index=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"].index(
@@ -95,7 +96,7 @@ def render_settings_view():
         )
 
     with col2:
-        log_file = st.text_input(
+        _ = st.text_input(
             "Log File Path", value=config.log_file, help="Path to log file"
         )
 
@@ -111,12 +112,13 @@ def render_settings_view():
     )
 
     if enable_notifications:
-        notification_method = st.selectbox(
+        _ = st.selectbox(
             "Notification Method", ["Email", "Telegram", "Discord", "Webhook"]
         )
 
-        notification_target = st.text_input(
-            "Notification Target", help="Email address, bot token, webhook URL, etc."
+        _ = st.text_input(
+            "Notification Target",
+            help="Email address, bot token, webhook URL, etc.",
         )
 
     st.markdown("---")
@@ -125,7 +127,7 @@ def render_settings_view():
     with st.expander("🔧 Advanced Settings"):
         st.markdown("**Performance**")
 
-        refresh_interval = st.number_input(
+        _ = st.number_input(
             "Refresh Interval (seconds)",
             min_value=1,
             max_value=300,
@@ -133,7 +135,7 @@ def render_settings_view():
             help="How often to check for new opportunities",
         )
 
-        max_workers = st.number_input(
+        _ = st.number_input(
             "Max Worker Threads",
             min_value=1,
             max_value=32,
@@ -143,7 +145,7 @@ def render_settings_view():
 
         st.markdown("**Risk Management**")
 
-        max_risk_score = st.slider(
+        _ = st.slider(
             "Maximum Risk Score",
             min_value=0.0,
             max_value=10.0,
@@ -159,15 +161,15 @@ def render_settings_view():
 
     with col1:
         if st.button("💾 Save Settings", type="primary"):
-            # TODO: Implement save logic
-            st.success("Settings saved successfully!")
-            logger.info("Settings saved")
+            st.warning(
+                "⚠️ Settings persistence not yet implemented. Please update .env file manually."
+            )
+            logger.info("Settings save attempted (not implemented)")
 
     with col2:
         if st.button("🔄 Reset to Defaults"):
-            # TODO: Implement reset logic
-            st.warning("Settings reset to defaults")
-            logger.info("Settings reset to defaults")
+            st.info("ℹ️ Reset not yet implemented. Current values are from .env file.")
+            logger.info("Settings reset attempted (not implemented)")
 
     st.markdown("---")
 
@@ -201,9 +203,9 @@ def validate_settings(settings: Dict[str, Any]) -> bool:
     Returns:
         True if valid, False otherwise
 
-    TODO: Implement comprehensive validation
+    Note: Placeholder for future implementation when persistence is added.
     """
-    # TODO: Add validation logic
+    # Placeholder - validation will be implemented with persistence
     return True
 
 

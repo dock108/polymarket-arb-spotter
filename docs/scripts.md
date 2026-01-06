@@ -4,6 +4,44 @@ This directory contains utility and operational scripts for the Polymarket Arbit
 
 ## Available Scripts
 
+### Production Scripts
+
+#### 📡 run_live_observer.py - Live CLI Observer
+
+**Purpose:** Command-line observer for real-time arbitrage detection.
+
+**Usage:**
+```bash
+python scripts/run_live_observer.py [OPTIONS]
+```
+
+**Options:**
+- `--mode {stream,poll}` - Connection mode (default: poll)
+- `--poll-interval SECONDS` - Polling interval (default: 30)
+- `--duration SECONDS` - Duration to run (default: run forever)
+- `--max-markets N` - Maximum markets to monitor (default: 100)
+- `--mock-trades` / `--no-mock-trades` - Enable/disable mock trade simulation
+- `--log-level LEVEL` - Logging level (default: INFO)
+
+**Description:**
+Connects to Polymarket API and monitors markets for arbitrage opportunities. Sends alerts via configured notification method and logs all events.
+
+---
+
+#### 🔔 run_price_alerts.py - Price Alert Watcher
+
+**Purpose:** Monitor markets and trigger price threshold alerts.
+
+**Usage:**
+```bash
+python scripts/run_price_alerts.py [--log-level LEVEL]
+```
+
+**Description:**
+Loads alerts from persistent storage and monitors markets via WebSocket. Sends notifications when price thresholds are crossed.
+
+---
+
 ### Example Scripts
 
 #### 📧 example_notification.py - Test Notification System
