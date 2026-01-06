@@ -524,3 +524,225 @@ This is an automated price alert from Polymarket Arbitrage Spotter.
 """
 
     return message
+
+
+def send_depth_alert(signal: Any) -> bool:
+    """
+    Send a depth alert notification using the global notification service.
+
+    This function reuses the notification infrastructure to send alerts when
+    orderbook depth signals are triggered (thin depth, large gaps, imbalances).
+    It handles failures gracefully to prevent crashes in monitoring loops.
+
+    Args:
+        signal: DepthSignal object or dictionary containing alert information.
+            Expected attributes/keys:
+            - signal_type: Type of signal ("thin_depth", "large_gap", "strong_imbalance")
+            - triggered: Whether the signal condition has been met
+            - reason: Human-readable explanation of the signal
+            - metrics: Dictionary containing relevant metrics
+            Optional keys (for context):
+            - market_id: Market identifier
+            - market_name: Human-readable market name
+            - side: Which side the signal affects ("YES", "NO", or "both")
+
+    Returns:
+        True if notification was sent successfully, False otherwise.
+        Always returns False (doesn't raise) if errors occur.
+
+    Examples:
+        >>> from app.core.depth_scanner import DepthSignal
+        >>> signal = DepthSignal(
+        ...     signal_type="thin_depth",
+        ...     triggered=True,
+        ...     reason="Thin orderbook depth: 200.00 < 500.00",
+        ...     metrics={"total_depth": 200.0, "threshold": 500.0}
+        ... )
+        >>> send_depth_alert(signal)
+    """
+    try:
+        # Handle both DepthSignal objects and dictionaries
+        if hasattr(signal, "to_dict"):
+            # It's a DepthSignal object
+            signal_dict = signal.to_dict()
+            signal_type = signal.signal_type
+            triggered = signal.triggered
+            reason = signal.reason
+            metrics = signal.metrics
+        else:
+            # It's a dictionary
+            signal_dict = signal
+            signal_type = signal_dict.get("signal_type", "unknown")
+            triggered = signal_dict.get("triggered", True)
+            reason = signal_dict.get("reason", "")
+            metrics = signal_dict.get("metrics", {})
+
+        # Extract optional context fields
+        market_id = signal_dict.get("market_id", "N/A")
+        market_name = signal_dict.get("market_name", market_id)
+        side = signal_dict.get("side", _infer_side_from_signal(signal_dict))
+
+        # Get the notification service
+        service = get_notification_service()
+
+        # Check if notifications are enabled
+        if not service.config.alert_method:
+            # Log instead of sending notification
+            logger.info(
+                f"Depth alert triggered (notifications disabled): "
+                f"{signal_type} - {reason}"
+            )
+            return False
+
+        # Build notification payload
+        notification_data = {
+            "signal_type": signal_type,
+            "triggered": triggered,
+            "reason": reason,
+            "metrics": metrics,
+            "market_id": market_id,
+            "market_name": market_name,
+            "side": side,
+            "timestamp": datetime.now().isoformat(),
+        }
+
+        # Format the message for depth alerts
+        message = _format_depth_alert_message(notification_data)
+        subject = _format_depth_alert_subject(notification_data)
+
+        # Send via configured method
+        success = False
+        if service.config.alert_method == "telegram":
+            success = service._send_telegram(message)
+        elif service.config.alert_method == "email":
+            success = service._send_email(subject, message)
+
+        if success:
+            logger.info(
+                f"Depth alert sent successfully via {service.config.alert_method}: "
+                f"{signal_type} - {reason}"
+            )
+        else:
+            logger.warning(
+                f"Failed to send depth alert via {service.config.alert_method}: "
+                f"{signal_type}"
+            )
+
+        return success
+
+    except Exception as e:
+        # Gracefully handle any errors to prevent crashing the loop
+        logger.error(f"Error sending depth alert: {e}", exc_info=True)
+        return False
+
+
+def _infer_side_from_signal(signal_dict: Dict[str, Any]) -> str:
+    """
+    Infer which side is affected from signal metrics.
+
+    Args:
+        signal_dict: Dictionary containing signal information
+
+    Returns:
+        "YES", "NO", or "both" depending on the signal type and metrics
+    """
+    metrics = signal_dict.get("metrics", {})
+    signal_type = signal_dict.get("signal_type", "")
+
+    # For imbalance signals, we can infer the affected side
+    if signal_type == "strong_imbalance":
+        deeper_side = metrics.get("deeper_side", "")
+        if deeper_side:
+            return deeper_side
+
+    # For thin_depth and large_gap, both sides are typically affected
+    return "both"
+
+
+def _format_depth_alert_subject(alert_data: Dict[str, Any]) -> str:
+    """
+    Format the subject line for a depth alert.
+
+    Args:
+        alert_data: Dictionary containing alert information
+
+    Returns:
+        Formatted subject string
+    """
+    signal_type = alert_data.get("signal_type", "unknown")
+    market_name = alert_data.get("market_name", "Unknown Market")
+
+    # Map signal types to emoji and human-readable names
+    signal_labels = {
+        "thin_depth": ("⚠️", "Thin Depth"),
+        "large_gap": ("📊", "Large Gap"),
+        "strong_imbalance": ("⚖️", "Imbalance"),
+    }
+
+    emoji, label = signal_labels.get(
+        signal_type, ("🔔", signal_type.replace("_", " ").title())
+    )
+
+    return f"{emoji} Depth Alert: {label} - {market_name}"
+
+
+def _format_depth_alert_message(alert_data: Dict[str, Any]) -> str:
+    """
+    Format the message body for a depth alert.
+
+    Args:
+        alert_data: Dictionary containing alert information
+
+    Returns:
+        Formatted message string
+    """
+    signal_type = alert_data.get("signal_type", "unknown")
+    reason = alert_data.get("reason", "No reason provided")
+    metrics = alert_data.get("metrics", {})
+    market_name = alert_data.get("market_name", "N/A")
+    market_id = alert_data.get("market_id", "N/A")
+    side = alert_data.get("side", "both")
+    timestamp = alert_data.get("timestamp", datetime.now().isoformat())
+
+    # Map signal types to emoji and human-readable names
+    signal_labels = {
+        "thin_depth": ("⚠️", "Thin Orderbook Depth"),
+        "large_gap": ("📊", "Large Bid-Ask Gap"),
+        "strong_imbalance": ("⚖️", "Strong Depth Imbalance"),
+    }
+
+    emoji, label = signal_labels.get(
+        signal_type, ("🔔", signal_type.replace("_", " ").title())
+    )
+
+    # Build metrics display
+    metrics_lines = []
+    for key, value in metrics.items():
+        # Format numeric values nicely
+        if isinstance(value, float):
+            formatted_value = f"{value:.4f}" if abs(value) < 10 else f"{value:.2f}"
+        else:
+            formatted_value = str(value)
+        metrics_lines.append(f"  • {key.replace('_', ' ').title()}: {formatted_value}")
+
+    metrics_str = (
+        "\n".join(metrics_lines) if metrics_lines else "  No metrics available"
+    )
+
+    message = f"""{emoji} Depth Alert: {label}
+
+Market: {market_name}
+Market ID: {market_id}
+Side Affected: {side.upper()}
+
+Reason: {reason}
+
+Key Metrics:
+{metrics_str}
+
+Timestamp: {timestamp}
+
+This is an automated depth alert from Polymarket Arbitrage Spotter.
+"""
+
+    return message
