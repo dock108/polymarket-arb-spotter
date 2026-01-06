@@ -5,11 +5,12 @@ A Python tool for detecting arbitrage opportunities in Polymarket prediction mar
 ## 🚀 Features
 
 - **Real-time Detection**: Monitor Polymarket markets for arbitrage opportunities
+- **Historical Replay Engine**: Test algorithms against past markets with configurable playback speeds
 - **Price Alert Watcher**: Subscribe to markets and get alerted when prices cross thresholds
 - **WebSocket Streaming**: Real-time price updates via WebSocket connections
 - **Mock Data Simulation**: Test detection algorithms with generated data
 - **Interactive Dashboard**: Streamlit-based UI for visualization
-- **SQLite Storage**: Persistent storage of detected opportunities
+- **SQLite Storage**: Persistent storage of detected opportunities and historical ticks
 - **Notification Support**: Telegram and email alerts
 
 ## 📁 Project Structure
@@ -77,6 +78,21 @@ python scripts/run_price_alerts.py
 
 See [docs/price_alerts_usage.md](docs/price_alerts_usage.md) for detailed usage.
 
+### Historical Replay Engine
+
+```bash
+# Replay all historical markets instantly
+python scripts/example_replay.py
+
+# Replay at 10× speed
+python scripts/example_replay.py --speed 10
+
+# Backtest with arbitrage detection
+python scripts/example_replay_with_arb_detector.py
+```
+
+See [docs/replay_engine.md](docs/replay_engine.md) for detailed documentation.
+
 ## 🧪 Testing
 
 ```bash
@@ -102,6 +118,7 @@ See `.env.example` for all available options.
 
 | Document | Description |
 |----------|-------------|
+| [Replay Engine](docs/replay_engine.md) | Historical data replay and backtesting |
 | [Notification Setup](docs/notifications.md) | Configure Telegram/email alerts |
 | [Deployment Guide](docs/deployment.md) | Deploy on Raspberry Pi or servers |
 | [Scripts Documentation](docs/scripts.md) | Example scripts and utilities |
