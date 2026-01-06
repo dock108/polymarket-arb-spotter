@@ -4,6 +4,7 @@ Logging configuration and utilities for the Polymarket Arbitrage Spotter.
 Includes structured logging for arbitrage events using SQLite database.
 """
 
+import json
 import logging
 import sys
 import threading
@@ -323,8 +324,6 @@ def log_depth_event(data: Dict[str, Any], db_path: str = _DB_PATH) -> None:
             - mode (str): Mode of operation ("mock" or "live")
         db_path: Path to the SQLite database file
     """
-    import json as json_module
-
     try:
         db = Database(db_path)
 
@@ -335,7 +334,7 @@ def log_depth_event(data: Dict[str, Any], db_path: str = _DB_PATH) -> None:
 
         # Serialize metrics dict to JSON string if it's a dict
         if isinstance(event_data.get("metrics"), dict):
-            event_data["metrics"] = json_module.dumps(event_data["metrics"])
+            event_data["metrics"] = json.dumps(event_data["metrics"])
 
         db["depth_events"].insert(event_data)
 
@@ -359,8 +358,6 @@ def fetch_recent_depth_events(
         ordered by timestamp in descending order (most recent first).
         The 'metrics' field is deserialized from JSON to a dictionary.
     """
-    import json as json_module
-
     try:
         db = Database(db_path)
 
@@ -387,8 +384,8 @@ def fetch_recent_depth_events(
             # Deserialize metrics JSON string to dict
             if row_dict.get("metrics"):
                 try:
-                    row_dict["metrics"] = json_module.loads(row_dict["metrics"])
-                except (json_module.JSONDecodeError, TypeError):
+                    row_dict["metrics"] = json.loads(row_dict["metrics"])
+                except (json.JSONDecodeError, TypeError):
                     pass  # Keep as string if deserialization fails
             results.append(row_dict)
 
