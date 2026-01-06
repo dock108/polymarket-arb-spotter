@@ -139,6 +139,18 @@ def init_db(db_path: str = _DB_PATH) -> None:
             pk="id",
         )
 
+    # Create history_labels table with schema if it doesn't exist
+    if "history_labels" not in db.table_names():
+        db["history_labels"].create(
+            {
+                "timestamp": str,
+                "market_id": str,
+                "label_type": str,
+                "notes": str,
+            },
+            pk="id",
+        )
+
 
 def log_event(data: Dict[str, Any], db_path: str = _DB_PATH) -> None:
     """
@@ -181,7 +193,7 @@ def _get_table_columns(db: Database, table_name: str) -> List[str]:
 
     Args:
         db: Database instance
-        table_name: Name of the table (must be 'arbitrage_events' or 'price_alert_events')
+        table_name: Name of the table (must be in the allowed list)
 
     Returns:
         List of column names
@@ -190,7 +202,7 @@ def _get_table_columns(db: Database, table_name: str) -> List[str]:
         ValueError: If table_name is not in the allowed list
     """
     # Whitelist of allowed table names to prevent SQL injection
-    allowed_tables = {"arbitrage_events", "price_alert_events", "depth_events"}
+    allowed_tables = {"arbitrage_events", "price_alert_events", "depth_events", "history_labels"}
     if table_name not in allowed_tables:
         raise ValueError(f"Invalid table name: {table_name}")
 
@@ -394,6 +406,127 @@ def fetch_recent_depth_events(
     except Exception as e:
         logger.error(f"Error fetching recent depth events: {e}", exc_info=True)
         return []
+
+
+def save_history_label(
+    data: Dict[str, Any], db_path: str = _DB_PATH
+) -> None:
+    """
+    Save a history label to the database.
+
+    Args:
+        data: Dictionary containing the label data with keys:
+            - timestamp (datetime or str): When the label was created
+            - market_id (str): Unique identifier of the market
+            - label_type (str): Type of label ("news-driven move", "whale entry", "arb collapse", "false signal")
+            - notes (str): Optional notes for the label
+        db_path: Path to the SQLite database file
+    """
+    try:
+        db = Database(db_path)
+
+        # Convert timestamp to string if it's a datetime object
+        label_data = data.copy()
+        if hasattr(label_data.get("timestamp"), "isoformat"):
+            label_data["timestamp"] = label_data["timestamp"].isoformat()
+
+        db["history_labels"].insert(label_data)
+
+    except Exception as e:
+        logger.error(f"Error saving history label to database: {e}", exc_info=True)
+
+
+def fetch_history_labels(
+    market_id: Optional[str] = None,
+    start: Optional[str] = None,
+    end: Optional[str] = None,
+    limit: int = 1000,
+    db_path: str = _DB_PATH,
+) -> List[Dict[str, Any]]:
+    """
+    Fetch history labels from the database.
+
+    Args:
+        market_id: Optional market ID to filter by
+        start: Optional start timestamp (ISO format string)
+        end: Optional end timestamp (ISO format string)
+        limit: Maximum number of entries to retrieve (default: 1000)
+        db_path: Path to the SQLite database file
+
+    Returns:
+        List of dictionaries containing the label data,
+        ordered by timestamp in descending order (most recent first)
+    """
+    try:
+        db = Database(db_path)
+
+        # Check if table exists
+        if "history_labels" not in db.table_names():
+            return []
+
+        # Build query
+        query = "SELECT * FROM history_labels"
+        params: List[Any] = []
+        where_clauses = []
+
+        if market_id:
+            where_clauses.append("market_id = ?")
+            params.append(market_id)
+
+        if start:
+            where_clauses.append("timestamp >= ?")
+            params.append(start)
+
+        if end:
+            where_clauses.append("timestamp <= ?")
+            params.append(end)
+
+        if where_clauses:
+            query += " WHERE " + " AND ".join(where_clauses)
+
+        query += " ORDER BY timestamp DESC LIMIT ?"
+        params.append(limit)
+
+        rows = db.execute(query, params).fetchall()
+
+        if not rows:
+            return []
+
+        # Get column names
+        columns = _get_table_columns(db, "history_labels")
+
+        return [dict(zip(columns, row)) for row in rows]
+
+    except Exception as e:
+        logger.error(f"Error fetching history labels: {e}", exc_info=True)
+        return []
+
+
+def delete_history_label(label_id: int, db_path: str = _DB_PATH) -> bool:
+    """
+    Delete a history label from the database.
+
+    Args:
+        label_id: ID of the label to delete
+        db_path: Path to the SQLite database file
+
+    Returns:
+        True if deletion was successful, False otherwise
+    """
+    try:
+        db = Database(db_path)
+
+        # Check if table exists
+        if "history_labels" not in db.table_names():
+            return False
+
+        db.execute("DELETE FROM history_labels WHERE id = ?", [label_id])
+        db.conn.commit()  # Explicitly commit the deletion
+        return True
+
+    except Exception as e:
+        logger.error(f"Error deleting history label: {e}", exc_info=True)
+        return False
 
 
 # Heartbeat monitoring
