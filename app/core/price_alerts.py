@@ -85,14 +85,14 @@ def create_price_alert(
 
     logger.info(
         f"Creating price alert for market {market_id}: "
-        f"{direction} ${target_price:.4f}"
+        f"{direction} {target_price:.4f}"
     )
 
     return PriceAlert(
         market_id=market_id,
         direction=direction,
         target_price=target_price,
-        alert_message=f"Alert: Price {direction} ${target_price:.4f}",
+        alert_message=f"Alert: Price {direction} {target_price:.4f}",
     )
 
 
@@ -127,8 +127,8 @@ def check_price_alert(alert: PriceAlert, current_price: float) -> PriceAlert:
         alert.triggered = True
         alert.triggered_at = datetime.now()
         alert.alert_message = (
-            f"Alert triggered: Price ${current_price:.4f} is above "
-            f"target ${alert.target_price:.4f}"
+            f"Alert triggered: Price {current_price:.4f} is above "
+            f"target {alert.target_price:.4f}"
         )
         logger.info(
             f"Price alert triggered for market {alert.market_id}: "
@@ -138,8 +138,8 @@ def check_price_alert(alert: PriceAlert, current_price: float) -> PriceAlert:
         alert.triggered = True
         alert.triggered_at = datetime.now()
         alert.alert_message = (
-            f"Alert triggered: Price ${current_price:.4f} is below "
-            f"target ${alert.target_price:.4f}"
+            f"Alert triggered: Price {current_price:.4f} is below "
+            f"target {alert.target_price:.4f}"
         )
         logger.info(
             f"Price alert triggered for market {alert.market_id}: "
@@ -149,9 +149,9 @@ def check_price_alert(alert: PriceAlert, current_price: float) -> PriceAlert:
         alert.triggered = False
         alert.triggered_at = None
         alert.alert_message = (
-            f"Alert not triggered: Price ${current_price:.4f} is "
+            f"Alert not triggered: Price {current_price:.4f} is "
             f"{'below' if alert.direction == 'above' else 'above'} "
-            f"target ${alert.target_price:.4f}"
+            f"target {alert.target_price:.4f}"
         )
 
     return alert
@@ -189,10 +189,7 @@ def watch_market_price(
     # For binary markets, use the first outcome's price
     outcomes = market_data.get("outcomes", [])
 
-    if not outcomes:
-        raise ValueError("market_data must contain at least one outcome")
-
-    if len(outcomes) < 1:
+    if not outcomes or len(outcomes) < 1:
         raise ValueError("market_data must contain at least one outcome with price")
 
     # Get the first outcome's price (typically "Yes" in binary markets)
