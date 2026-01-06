@@ -6,8 +6,109 @@ outcomes, calculating metrics such as total depth, top-of-book gaps, and
 imbalances.
 """
 
+import json
+import os
 from dataclasses import dataclass
-from typing import Dict, Any, List, Union
+from pathlib import Path
+from typing import Dict, Any, List, Union, Optional
+
+
+# Default configuration file path
+DEFAULT_CONFIG_PATH = "data/depth_config.json"
+
+# Default configuration values
+DEFAULT_CONFIG = {
+    "min_depth": 500.0,
+    "max_gap": 0.10,
+    "imbalance_ratio": 300.0,
+    "markets_to_watch": [],
+}
+
+
+def load_depth_config(config_path: Optional[str] = None) -> Dict[str, Any]:
+    """
+    Load depth configuration from JSON file.
+
+    Args:
+        config_path: Path to the configuration file. If None, uses DEFAULT_CONFIG_PATH.
+
+    Returns:
+        Dictionary containing configuration values with keys:
+            - min_depth: Minimum total depth threshold
+            - max_gap: Maximum acceptable bid-ask spread
+            - imbalance_ratio: Maximum acceptable depth imbalance
+            - markets_to_watch: List of market IDs to monitor
+
+    Raises:
+        FileNotFoundError: If config file doesn't exist and no default can be created
+        json.JSONDecodeError: If config file contains invalid JSON
+
+    Example:
+        >>> config = load_depth_config()
+        >>> config["min_depth"]
+        500.0
+    """
+    if config_path is None:
+        config_path = DEFAULT_CONFIG_PATH
+
+    path = Path(config_path)
+
+    # If file doesn't exist, create it with default values
+    if not path.exists():
+        # Ensure parent directory exists
+        path.parent.mkdir(parents=True, exist_ok=True)
+        # Create default config file
+        save_depth_config(DEFAULT_CONFIG, config_path)
+        return DEFAULT_CONFIG.copy()
+
+    # Load from file
+    with open(path, "r") as f:
+        config = json.load(f)
+
+    # Merge with defaults to ensure all keys are present
+    merged_config = DEFAULT_CONFIG.copy()
+    merged_config.update(config)
+
+    return merged_config
+
+
+def save_depth_config(
+    config: Dict[str, Any], config_path: Optional[str] = None
+) -> None:
+    """
+    Save depth configuration to JSON file.
+
+    Args:
+        config: Configuration dictionary with keys:
+            - min_depth: Minimum total depth threshold
+            - max_gap: Maximum acceptable bid-ask spread
+            - imbalance_ratio: Maximum acceptable depth imbalance
+            - markets_to_watch: List of market IDs to monitor
+        config_path: Path to save the configuration file. If None, uses DEFAULT_CONFIG_PATH.
+
+    Raises:
+        OSError: If file cannot be written
+
+    Example:
+        >>> config = {
+        ...     "min_depth": 1000.0,
+        ...     "max_gap": 0.05,
+        ...     "imbalance_ratio": 500.0,
+        ...     "markets_to_watch": ["market1", "market2"]
+        ... }
+        >>> save_depth_config(config)
+    """
+    if config_path is None:
+        config_path = DEFAULT_CONFIG_PATH
+
+    path = Path(config_path)
+
+    # Ensure parent directory exists
+    path.parent.mkdir(parents=True, exist_ok=True)
+
+    # Write config to file with pretty formatting
+    with open(path, "w") as f:
+        json.dump(config, f, indent=2)
 
 
 @dataclass
@@ -240,7 +341,9 @@ def convert_normalized_to_raw(
     return {"bids": bids, "asks": asks}
 
 
-def detect_depth_signals(metrics: Dict[str, float]) -> List[DepthSignal]:
+def detect_depth_signals(
+    metrics: Dict[str, float], config: Optional[Dict[str, Any]] = None
+) -> List[DepthSignal]:
     """
     Detect depth-related signals from orderbook metrics.
 
@@ -257,6 +360,11 @@ def detect_depth_signals(metrics: Dict[str, float]) -> List[DepthSignal]:
                 - top_gap_yes: YES bid-ask spread
                 - top_gap_no: NO bid-ask spread
                 - imbalance: Difference between YES and NO depth
+        config: Optional configuration dictionary. If None, loads from default config file.
+                Expected keys:
+                - min_depth: Minimum total depth threshold
+                - max_gap: Maximum acceptable bid-ask spread
+                - imbalance_ratio: Maximum acceptable depth imbalance
 
     Returns:
         List of DepthSignal objects for triggered conditions
@@ -277,10 +385,14 @@ def detect_depth_signals(metrics: Dict[str, float]) -> List[DepthSignal]:
     """
     signals = []
 
-    # Thresholds for signal detection
-    THIN_DEPTH_THRESHOLD = 500.0  # Minimum total depth
-    LARGE_GAP_THRESHOLD = 0.10  # Maximum acceptable spread (10%)
-    STRONG_IMBALANCE_THRESHOLD = 300.0  # Maximum acceptable imbalance
+    # Load configuration if not provided
+    if config is None:
+        config = load_depth_config()
+
+    # Thresholds for signal detection (from config)
+    THIN_DEPTH_THRESHOLD = config.get("min_depth", 500.0)
+    LARGE_GAP_THRESHOLD = config.get("max_gap", 0.10)
+    STRONG_IMBALANCE_THRESHOLD = config.get("imbalance_ratio", 300.0)
 
     # Extract metrics
     total_yes_depth = metrics.get("total_yes_depth", 0.0)

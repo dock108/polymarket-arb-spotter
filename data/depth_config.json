@@ -1,0 +1,6 @@
+{
+  "min_depth": 500.0,
+  "max_gap": 0.10,
+  "imbalance_ratio": 300.0,
+  "markets_to_watch": []
+}

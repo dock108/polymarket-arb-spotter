@@ -149,6 +149,7 @@ data/*.sqlite
 data/*.log
 data/*.csv
 data/*.json
+!data/depth_config.json
 data/cache/
 *.db-journal
 
