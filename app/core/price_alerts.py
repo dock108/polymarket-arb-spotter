@@ -8,10 +8,11 @@ sending notifications. Includes persistent JSON storage for alerts.
 
 import json
 import os
+import threading
 import uuid
 from dataclasses import dataclass
-from datetime import datetime
-from typing import Dict, Any, Optional, Literal, List
+from datetime import datetime, timedelta
+from typing import Dict, Any, Optional, Literal, List, Callable
 from app.core.logger import logger
 
 
@@ -410,3 +411,264 @@ def list_alerts(
     logger.debug(f"Listed {len(alert_list)} alerts")
     
     return alert_list
+
+
+# ============================================================================
+# Price Alert Watcher
+# ============================================================================
+
+
+class PriceAlertWatcher:
+    """
+    Watches markets and triggers price alerts based on configured thresholds.
+    
+    This watcher subscribes to real-time price updates via WebSocket and
+    monitors markets that have active alerts. When a price crosses a threshold,
+    it fires the alert and tracks the last trigger time to prevent duplicates.
+    
+    Attributes:
+        api_client: PolymarketAPIClient instance for fetching prices
+        storage_path: Path to JSON file storing alerts
+        alert_cooldown: Minimum time between duplicate alerts (seconds)
+        on_alert_triggered: Optional callback when alert triggers
+    """
+    
+    def __init__(
+        self,
+        api_client: Any,  # PolymarketAPIClient
+        storage_path: str = ALERTS_STORAGE_PATH,
+        alert_cooldown: float = 300.0,  # 5 minutes default
+        on_alert_triggered: Optional[Callable[[PriceAlert], None]] = None,
+    ):
+        """
+        Initialize the price alert watcher.
+        
+        Args:
+            api_client: PolymarketAPIClient instance for WebSocket subscriptions
+            storage_path: Path to JSON file storing alerts
+            alert_cooldown: Minimum seconds between duplicate alerts (default: 300)
+            on_alert_triggered: Optional callback function(alert) when alert triggers
+        """
+        self.api_client = api_client
+        self.storage_path = storage_path
+        self.alert_cooldown = alert_cooldown
+        self.on_alert_triggered = on_alert_triggered
+        
+        # Track last trigger time for each alert to prevent duplicates
+        self._last_trigger_times: Dict[str, datetime] = {}
+        
+        # Thread control
+        self._running = False
+        self._watch_thread: Optional[threading.Thread] = None
+        
+        logger.info(
+            f"PriceAlertWatcher initialized with {alert_cooldown}s cooldown"
+        )
+    
+    def start(self) -> None:
+        """
+        Start watching markets with active alerts.
+        
+        Loads alerts from storage, subscribes to relevant markets via WebSocket,
+        and begins monitoring prices in a background thread.
+        """
+        if self._running:
+            logger.warning("PriceAlertWatcher is already running")
+            return
+        
+        # Load alerts to determine which markets to watch
+        alerts = list_alerts(self.storage_path)
+        
+        if not alerts:
+            logger.info("No alerts to watch, starting with empty watch list")
+        
+        # Extract unique market IDs from alerts
+        market_ids = list(set(alert["market_id"] for alert in alerts))
+        
+        if not market_ids:
+            logger.warning("No market IDs found in alerts")
+            return
+        
+        logger.info(f"Starting watcher for {len(market_ids)} markets")
+        
+        # Start the watch thread
+        self._running = True
+        self._watch_thread = threading.Thread(
+            target=self._watch_loop,
+            args=(market_ids,),
+            daemon=True,
+        )
+        self._watch_thread.start()
+        
+        logger.info("PriceAlertWatcher started successfully")
+    
+    def stop(self) -> None:
+        """
+        Stop watching markets and clean up resources.
+        """
+        if not self._running:
+            logger.warning("PriceAlertWatcher is not running")
+            return
+        
+        logger.info("Stopping PriceAlertWatcher...")
+        self._running = False
+        
+        # Stop WebSocket connection
+        try:
+            self.api_client.stop_websocket()
+        except Exception as e:
+            logger.warning(f"Error stopping WebSocket: {e}")
+        
+        # Wait for thread to finish
+        if self._watch_thread and self._watch_thread.is_alive():
+            self._watch_thread.join(timeout=5.0)
+        
+        logger.info("PriceAlertWatcher stopped")
+    
+    def _watch_loop(self, market_ids: List[str]) -> None:
+        """
+        Main watch loop that subscribes to markets and processes price updates.
+        
+        Args:
+            market_ids: List of market IDs to watch
+        """
+        try:
+            self.api_client.subscribe_to_markets(
+                market_ids=market_ids,
+                on_price_update=self._handle_price_update,
+                on_error=self._handle_error,
+            )
+        except Exception as e:
+            logger.error(f"Error in watch loop: {e}")
+            self._running = False
+    
+    def _handle_price_update(
+        self,
+        market_id: str,
+        orderbook: Any,  # NormalizedOrderBook
+    ) -> None:
+        """
+        Handle a price update for a market.
+        
+        Checks all alerts for this market and triggers those whose
+        conditions are met, respecting the cooldown period.
+        
+        Args:
+            market_id: Market identifier
+            orderbook: NormalizedOrderBook with latest prices
+        """
+        if not self._running:
+            return
+        
+        # Load current alerts for this market
+        all_alerts = list_alerts(self.storage_path)
+        market_alerts = [
+            alert for alert in all_alerts
+            if alert["market_id"] == market_id
+        ]
+        
+        if not market_alerts:
+            return
+        
+        # Use yes_best_ask as the current price (most conservative for YES)
+        # Could also use yes_best_bid or midpoint depending on requirements
+        current_price = orderbook.yes_best_ask
+        
+        if current_price is None:
+            logger.debug(f"No price available for market {market_id}")
+            return
+        
+        logger.debug(
+            f"Price update for {market_id}: {current_price:.4f}"
+        )
+        
+        # Check each alert
+        for alert_data in market_alerts:
+            alert_id = alert_data["id"]
+            direction = alert_data["direction"]
+            target_price = alert_data["target_price"]
+            
+            # Create PriceAlert object
+            alert = create_price_alert(
+                market_id=market_id,
+                direction=direction,
+                target_price=target_price,
+            )
+            
+            # Check if alert should trigger
+            result = check_price_alert(alert, current_price)
+            
+            if result.triggered:
+                # Check cooldown to prevent duplicate alerts
+                if self._should_fire_alert(alert_id):
+                    self._fire_alert(alert_id, result)
+    
+    def _should_fire_alert(self, alert_id: str) -> bool:
+        """
+        Check if enough time has passed since last trigger to fire alert again.
+        
+        Args:
+            alert_id: Alert identifier
+            
+        Returns:
+            True if alert should be fired, False if still in cooldown
+        """
+        now = datetime.now()
+        last_trigger = self._last_trigger_times.get(alert_id)
+        
+        if last_trigger is None:
+            return True
+        
+        time_since_last = (now - last_trigger).total_seconds()
+        return time_since_last >= self.alert_cooldown
+    
+    def _fire_alert(self, alert_id: str, alert: PriceAlert) -> None:
+        """
+        Fire an alert by logging it and calling the callback.
+        
+        Args:
+            alert_id: Alert identifier
+            alert: PriceAlert object with triggered status
+        """
+        # Update last trigger time
+        self._last_trigger_times[alert_id] = datetime.now()
+        
+        logger.info(
+            f"ALERT FIRED [{alert_id}]: {alert.alert_message}"
+        )
+        
+        # Call callback if provided
+        if self.on_alert_triggered:
+            try:
+                self.on_alert_triggered(alert)
+            except Exception as e:
+                logger.error(f"Error in alert callback: {e}")
+    
+    def _handle_error(self, error: Exception) -> None:
+        """
+        Handle errors from WebSocket connection.
+        
+        Args:
+            error: Exception that occurred
+        """
+        logger.error(f"WebSocket error in PriceAlertWatcher: {error}")
+    
+    def is_running(self) -> bool:
+        """
+        Check if the watcher is currently running.
+        
+        Returns:
+            True if watcher is running, False otherwise
+        """
+        return self._running
+    
+    def reload_alerts(self) -> None:
+        """
+        Reload alerts from storage and update subscriptions.
+        
+        This can be called to pick up new alerts without restarting the watcher.
+        Note: Currently requires a restart to change subscriptions.
+        """
+        logger.info("Reloading alerts (restart required to update subscriptions)")
+        # For now, just log. Full implementation would require dynamic
+        # subscription management in the WebSocket connection.
