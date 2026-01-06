@@ -55,6 +55,10 @@ from app.core.depth_scanner import (
 from app.core.notifications import send_depth_alert
 from app.core.logger import logger, init_db, log_depth_event
 from app.core.config import get_config
+from app.core.history_recorder import (
+    HistoryRecorder,
+    record_market_tick,
+)
 
 
 class DepthScannerRunner:
@@ -97,6 +101,9 @@ class DepthScannerRunner:
         self.max_retries = 5
         self.base_backoff = 2.0  # Base backoff time in seconds
         self.config = get_config()
+
+        # History recorder for non-blocking tick recording
+        self.history_recorder: Optional[HistoryRecorder] = None
 
         # Deduplication tracking: maps signal hash -> last triggered timestamp
         self._signal_dedupe: Dict[str, datetime] = {}
@@ -280,6 +287,24 @@ class DepthScannerRunner:
 
             metrics = analyze_normalized_depth(yes_bids, yes_asks, no_bids, no_asks)
 
+            # Record market tick to history (non-blocking)
+            # Extract best bid/ask prices for yes and no outcomes
+            yes_price = yes_bids[0][0] if yes_bids else 0.0
+            no_price = no_bids[0][0] if no_bids else 0.0
+            depth_summary = {
+                "total_depth": metrics.get("total_depth", 0),
+                "yes_depth": metrics.get("yes_depth", 0),
+                "no_depth": metrics.get("no_depth", 0),
+                "max_gap": metrics.get("max_gap", 0),
+            }
+            record_market_tick(
+                market_id=market_id,
+                yes_price=yes_price,
+                no_price=no_price,
+                volume=0.0,
+                depth_summary=depth_summary,
+            )
+
             # Detect signals
             signals = detect_depth_signals(metrics, depth_config)
 
@@ -382,6 +407,11 @@ class DepthScannerRunner:
             f"Alert method: {self.config.alert_method or 'Disabled (will log only)'}"
         )
         logger.info(f"Deduplication window: {self.DEDUPE_WINDOW_SECONDS}s")
+        logger.info(
+            f"History recording: {'Enabled' if self.config.enable_history else 'Disabled'}"
+        )
+        if self.config.enable_history:
+            logger.info(f"History sampling: {self.config.history_sampling_ms}ms")
         if self.duration:
             logger.info(f"Duration: {self.duration}s")
         else:
@@ -393,6 +423,10 @@ class DepthScannerRunner:
         logger.info("Initializing database...")
         init_db()
         logger.info("✓ Database initialized")
+
+        # Initialize history recorder
+        self.history_recorder = HistoryRecorder()
+        self.history_recorder.start()
 
         # Load and display watched markets
         depth_config = load_depth_config(self.config_path)
@@ -520,6 +554,13 @@ class DepthScannerRunner:
         Stop the depth scanner system.
         """
         self.running = False
+
+        if self.history_recorder:
+            try:
+                self.history_recorder.stop()
+            except Exception as e:
+                logger.error(f"Error stopping history recorder: {e}")
+
         logger.info("✓ Depth scanner stopped")
 
 

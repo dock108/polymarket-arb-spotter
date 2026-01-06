@@ -13,6 +13,7 @@ import streamlit as st
 
 from app.core.arb_detector import ArbitrageDetector
 from app.core.config import config
+from app.core.history_recorder import record_market_tick
 from app.core.logger import fetch_recent, logger
 from app.core.mock_data import MockDataGenerator
 from app.ui.depth_view import render_depth_view
@@ -249,6 +250,22 @@ def generate_mock_data():
     # Generate mock data
     generator = MockDataGenerator(arb_frequency=0.3)
     markets = generator.generate_snapshots(count=20)
+
+    # Record market data to history (non-blocking)
+    for market in markets:
+        if market is None:
+            continue
+        outcomes = market.get("outcomes", [])
+        if len(outcomes) >= 2:
+            yes_price = outcomes[0].get("price", 0)
+            no_price = outcomes[1].get("price", 0)
+            volume = market.get("volume", 0)
+            record_market_tick(
+                market_id=market.get("id", "unknown"),
+                yes_price=yes_price,
+                no_price=no_price,
+                volume=volume,
+            )
 
     # Initialize detector
     detector = ArbitrageDetector()

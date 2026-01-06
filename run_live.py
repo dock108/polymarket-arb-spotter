@@ -12,6 +12,7 @@ from app.ui.dashboard import render_dashboard
 from app.ui.history_view import render_history_view
 from app.ui.settings_view import render_settings_view
 from app.core.logger import logger, start_heartbeat
+from app.core.history_recorder import start_history_recorder, stop_history_recorder
 
 
 # Initialize heartbeat monitor at module level (only once per Streamlit session)
@@ -19,6 +20,10 @@ if "heartbeat" not in st.session_state:
     st.session_state.heartbeat = start_heartbeat(
         interval=60, callback=lambda: {"status": "monitoring", "mode": "live_ui"}
     )
+
+# Initialize history recorder at module level (only once per Streamlit session)
+if "history_recorder" not in st.session_state:
+    st.session_state.history_recorder = start_history_recorder()
 
 
 def main():

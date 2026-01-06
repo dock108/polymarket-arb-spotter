@@ -53,6 +53,10 @@ class Config:
     log_level: str = "INFO"
     log_file: str = "data/polymarket_arb.log"
 
+    # History Recording Configuration
+    enable_history: bool = False  # Whether to record market history
+    history_sampling_ms: int = 1500  # Minimum interval between recordings (ms)
+
     @classmethod
     def from_env(cls) -> "Config":
         """
@@ -77,6 +81,8 @@ class Config:
         - API_KEY: Polymarket API key
         - DB_PATH: Main database path
         - MAX_STAKE: Maximum stake per arbitrage
+        - ENABLE_HISTORY: Enable history recording (default: false)
+        - HISTORY_SAMPLING_MS: History sampling interval in ms (default: 1500)
 
         Returns:
             Config instance with values loaded from environment
@@ -119,6 +125,11 @@ class Config:
         log_file = os.getenv("LOG_FILE", "data/polymarket_arb.log")
         max_stake = float(os.getenv("MAX_STAKE", "1000.0"))
 
+        # Load history recording configuration
+        enable_history_str = os.getenv("ENABLE_HISTORY", "false")
+        enable_history = enable_history_str.lower() in ("true", "1", "yes")
+        history_sampling_ms = int(os.getenv("HISTORY_SAMPLING_MS", "1500"))
+
         # Create config instance
         config = cls(
             api_endpoint=api_endpoint,
@@ -141,6 +152,8 @@ class Config:
             notification_throttle_seconds=notification_throttle_seconds,
             log_level=log_level,
             log_file=log_file,
+            enable_history=enable_history,
+            history_sampling_ms=history_sampling_ms,
         )
 
         # Validate and log configuration
