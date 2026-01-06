@@ -614,5 +614,358 @@ class TestSendPriceAlert(unittest.TestCase):
         self.assertIn("2024-01-01T12:00:00", message)
 
 
+class TestSendDepthAlert(unittest.TestCase):
+    """Test send_depth_alert function."""
+
+    def setUp(self):
+        """Set up test fixtures."""
+        # Import here to avoid circular imports
+        from app.core.depth_scanner import DepthSignal
+
+        self.DepthSignal = DepthSignal
+
+        # Sample DepthSignal object - thin depth
+        self.thin_depth_signal = DepthSignal(
+            signal_type="thin_depth",
+            triggered=True,
+            reason="Thin orderbook depth: 200.00 < 500.00",
+            metrics={
+                "total_depth": 200.0,
+                "threshold": 500.0,
+                "total_yes_depth": 100.0,
+                "total_no_depth": 100.0,
+            },
+        )
+
+        # Sample DepthSignal object - large gap
+        self.large_gap_signal = DepthSignal(
+            signal_type="large_gap",
+            triggered=True,
+            reason="Large bid-ask gap: 0.1500 > 0.1000",
+            metrics={
+                "max_gap": 0.15,
+                "threshold": 0.10,
+                "top_gap_yes": 0.15,
+                "top_gap_no": 0.15,
+            },
+        )
+
+        # Sample DepthSignal object - strong imbalance
+        self.imbalance_signal = DepthSignal(
+            signal_type="strong_imbalance",
+            triggered=True,
+            reason="Strong depth imbalance: 500.00 > 300.00 (favors YES)",
+            metrics={
+                "imbalance": 500.0,
+                "abs_imbalance": 500.0,
+                "threshold": 300.0,
+                "deeper_side": "YES",
+                "total_yes_depth": 1500.0,
+                "total_no_depth": 1000.0,
+            },
+        )
+
+        # Sample alert dictionary
+        self.alert_dict = {
+            "signal_type": "thin_depth",
+            "triggered": True,
+            "reason": "Thin orderbook depth: 150.00 < 500.00",
+            "metrics": {
+                "total_depth": 150.0,
+                "threshold": 500.0,
+            },
+            "market_id": "test_market_123",
+            "market_name": "Test Market",
+            "side": "both",
+        }
+
+    @patch("app.core.notifications.get_config")
+    def test_send_depth_alert_disabled_notifications(self, mock_get_config):
+        """Test that send_depth_alert logs when notifications are disabled."""
+        from app.core.notifications import send_depth_alert, _reset_notification_service
+
+        # Mock config with no alert method
+        mock_config = Config(alert_method=None)
+        mock_get_config.return_value = mock_config
+        _reset_notification_service()
+
+        with patch("app.core.notifications.logger") as mock_logger:
+            result = send_depth_alert(self.thin_depth_signal)
+
+            # Should return False
+            self.assertFalse(result)
+
+            # Should log the alert
+            mock_logger.info.assert_called()
+            call_args = str(mock_logger.info.call_args)
+            self.assertIn("notifications disabled", call_args.lower())
+
+    @patch("app.core.notifications.get_config")
+    @patch("app.core.notifications.requests.post")
+    def test_send_depth_alert_with_object_telegram(self, mock_post, mock_get_config):
+        """Test sending depth alert with DepthSignal object via Telegram."""
+        from app.core.notifications import send_depth_alert, _reset_notification_service
+
+        # Mock config with Telegram
+        mock_config = Config(
+            alert_method="telegram",
+            telegram_api_key="test_key",
+            telegram_chat_id="test_chat_id",
+        )
+        mock_get_config.return_value = mock_config
+        _reset_notification_service()
+
+        # Mock successful response
+        mock_response = MagicMock()
+        mock_response.raise_for_status = MagicMock()
+        mock_post.return_value = mock_response
+
+        result = send_depth_alert(self.thin_depth_signal)
+
+        # Should return True
+        self.assertTrue(result)
+
+        # Should have called Telegram API
+        mock_post.assert_called_once()
+
+        # Verify message content
+        call_args = mock_post.call_args
+        payload = call_args[1]["json"]
+        message = payload["text"]
+        self.assertIn("Thin", message)  # Signal type label
+        self.assertIn("200", message)  # total_depth
+        self.assertIn("500", message)  # threshold
+
+    @patch("app.core.notifications.get_config")
+    @patch("app.core.notifications.requests.post")
+    def test_send_depth_alert_with_dict_telegram(self, mock_post, mock_get_config):
+        """Test sending depth alert with dictionary via Telegram."""
+        from app.core.notifications import send_depth_alert, _reset_notification_service
+
+        # Mock config with Telegram
+        mock_config = Config(
+            alert_method="telegram",
+            telegram_api_key="test_key",
+            telegram_chat_id="test_chat_id",
+        )
+        mock_get_config.return_value = mock_config
+        _reset_notification_service()
+
+        # Mock successful response
+        mock_response = MagicMock()
+        mock_response.raise_for_status = MagicMock()
+        mock_post.return_value = mock_response
+
+        result = send_depth_alert(self.alert_dict)
+
+        # Should return True
+        self.assertTrue(result)
+
+        # Should have called Telegram API
+        mock_post.assert_called_once()
+
+        # Verify message content includes market info
+        call_args = mock_post.call_args
+        payload = call_args[1]["json"]
+        message = payload["text"]
+        self.assertIn("Test Market", message)
+        self.assertIn("test_market_123", message)
+
+    @patch("app.core.notifications.get_config")
+    @patch("app.core.notifications.smtplib.SMTP")
+    def test_send_depth_alert_email(self, mock_smtp, mock_get_config):
+        """Test sending depth alert via email."""
+        from app.core.notifications import send_depth_alert, _reset_notification_service
+
+        # Mock config with Email
+        mock_config = Config(
+            alert_method="email",
+            email_smtp_server="smtp.example.com",
+            email_smtp_port=587,
+            email_username="test@example.com",
+            email_password="password",
+            email_from="from@example.com",
+            email_to="to@example.com",
+        )
+        mock_get_config.return_value = mock_config
+        _reset_notification_service()
+
+        # Mock SMTP server
+        mock_server = MagicMock()
+        mock_smtp.return_value.__enter__.return_value = mock_server
+
+        result = send_depth_alert(self.large_gap_signal)
+
+        # Should return True
+        self.assertTrue(result)
+
+        # Should have sent email
+        mock_server.send_message.assert_called_once()
+
+    @patch("app.core.notifications.get_config")
+    @patch("app.core.notifications.requests.post")
+    def test_send_depth_alert_error_handling(self, mock_post, mock_get_config):
+        """Test that send_depth_alert handles errors gracefully."""
+        from app.core.notifications import send_depth_alert, _reset_notification_service
+
+        # Mock config with Telegram
+        mock_config = Config(
+            alert_method="telegram",
+            telegram_api_key="test_key",
+            telegram_chat_id="test_chat_id",
+        )
+        mock_get_config.return_value = mock_config
+        _reset_notification_service()
+
+        # Mock exception
+        mock_post.side_effect = Exception("Network error")
+
+        # Should not raise exception
+        result = send_depth_alert(self.thin_depth_signal)
+
+        # Should return False
+        self.assertFalse(result)
+
+    @patch("app.core.notifications.get_config")
+    def test_send_depth_alert_with_malformed_data(self, mock_get_config):
+        """Test send_depth_alert with malformed data doesn't crash."""
+        from app.core.notifications import send_depth_alert, _reset_notification_service
+
+        # Mock config with Telegram
+        mock_config = Config(
+            alert_method="telegram",
+            telegram_api_key="test_key",
+            telegram_chat_id="test_chat_id",
+        )
+        mock_get_config.return_value = mock_config
+        _reset_notification_service()
+
+        # Malformed alert data (missing keys)
+        malformed_alert = {"signal_type": "unknown"}
+
+        with patch("app.core.notifications.requests.post"):
+            # Should not raise exception
+            result = send_depth_alert(malformed_alert)
+            # May return True or False, but should not crash
+            self.assertIsInstance(result, bool)
+
+    @patch("app.core.notifications.get_config")
+    @patch("app.core.notifications.requests.post")
+    def test_send_depth_alert_imbalance_signal(self, mock_post, mock_get_config):
+        """Test sending imbalance signal includes side information."""
+        from app.core.notifications import send_depth_alert, _reset_notification_service
+
+        # Mock config with Telegram
+        mock_config = Config(
+            alert_method="telegram",
+            telegram_api_key="test_key",
+            telegram_chat_id="test_chat_id",
+        )
+        mock_get_config.return_value = mock_config
+        _reset_notification_service()
+
+        # Mock successful response
+        mock_response = MagicMock()
+        mock_response.raise_for_status = MagicMock()
+        mock_post.return_value = mock_response
+
+        result = send_depth_alert(self.imbalance_signal)
+
+        # Should return True
+        self.assertTrue(result)
+
+        # Verify message content includes side info
+        call_args = mock_post.call_args
+        payload = call_args[1]["json"]
+        message = payload["text"]
+        self.assertIn("YES", message)  # deeper_side in metrics
+
+    def test_format_depth_alert_subject(self):
+        """Test depth alert subject formatting."""
+        from app.core.notifications import _format_depth_alert_subject
+
+        # Test thin depth
+        alert_data = {
+            "signal_type": "thin_depth",
+            "market_name": "Bitcoin 100K",
+        }
+        subject = _format_depth_alert_subject(alert_data)
+        self.assertIn("Bitcoin 100K", subject)
+        self.assertIn("Thin Depth", subject)
+
+        # Test large gap
+        alert_data = {
+            "signal_type": "large_gap",
+            "market_name": "ETH 5K",
+        }
+        subject = _format_depth_alert_subject(alert_data)
+        self.assertIn("ETH 5K", subject)
+        self.assertIn("Large Gap", subject)
+
+        # Test strong imbalance
+        alert_data = {
+            "signal_type": "strong_imbalance",
+            "market_name": "Market X",
+        }
+        subject = _format_depth_alert_subject(alert_data)
+        self.assertIn("Market X", subject)
+        self.assertIn("Imbalance", subject)
+
+    def test_format_depth_alert_message(self):
+        """Test depth alert message formatting."""
+        from app.core.notifications import _format_depth_alert_message
+
+        alert_data = {
+            "signal_type": "thin_depth",
+            "reason": "Thin orderbook depth: 200.00 < 500.00",
+            "metrics": {
+                "total_depth": 200.0,
+                "threshold": 500.0,
+                "total_yes_depth": 100.0,
+                "total_no_depth": 100.0,
+            },
+            "market_id": "btc_100k",
+            "market_name": "Bitcoin 100K",
+            "side": "both",
+            "timestamp": "2024-01-01T12:00:00",
+        }
+
+        message = _format_depth_alert_message(alert_data)
+
+        self.assertIn("Bitcoin 100K", message)
+        self.assertIn("btc_100k", message)
+        self.assertIn("BOTH", message)
+        self.assertIn("200.00 < 500.00", message)
+        self.assertIn("2024-01-01T12:00:00", message)
+        # Check metrics are included
+        self.assertIn("Total Depth", message)
+        self.assertIn("Threshold", message)
+
+    def test_infer_side_from_signal(self):
+        """Test side inference from signal metrics."""
+        from app.core.notifications import _infer_side_from_signal
+
+        # Test imbalance with deeper_side
+        signal_dict = {
+            "signal_type": "strong_imbalance",
+            "metrics": {"deeper_side": "YES"},
+        }
+        self.assertEqual(_infer_side_from_signal(signal_dict), "YES")
+
+        # Test thin_depth (affects both)
+        signal_dict = {
+            "signal_type": "thin_depth",
+            "metrics": {"total_depth": 100.0},
+        }
+        self.assertEqual(_infer_side_from_signal(signal_dict), "both")
+
+        # Test large_gap (affects both)
+        signal_dict = {
+            "signal_type": "large_gap",
+            "metrics": {"max_gap": 0.15},
+        }
+        self.assertEqual(_infer_side_from_signal(signal_dict), "both")
+
+
 if __name__ == "__main__":
     unittest.main()
