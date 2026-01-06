@@ -115,9 +115,11 @@ class PriceAlertRunner:
             )
 
             # Record market tick to history (non-blocking)
+            # Note: For binary markets, the yes/no prices should sum to ~1.0.
+            # Price alerts monitor a single outcome, so we estimate the complementary
+            # price. This is an approximation - actual no_price may differ slightly
+            # due to market spread or fees.
             if alert.current_price is not None:
-                # For price alerts, we typically monitor one side (yes or no)
-                # Record the current price as the yes_price, with no_price as complement
                 record_market_tick(
                     market_id=alert.market_id,
                     yes_price=alert.current_price,

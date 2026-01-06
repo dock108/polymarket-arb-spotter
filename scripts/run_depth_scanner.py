@@ -288,22 +288,24 @@ class DepthScannerRunner:
             metrics = analyze_normalized_depth(yes_bids, yes_asks, no_bids, no_asks)
 
             # Record market tick to history (non-blocking)
-            # Extract best bid/ask prices for yes and no outcomes
-            yes_price = yes_bids[0][0] if yes_bids else 0.0
-            no_price = no_bids[0][0] if no_bids else 0.0
-            depth_summary = {
-                "total_depth": metrics.get("total_depth", 0),
-                "yes_depth": metrics.get("yes_depth", 0),
-                "no_depth": metrics.get("no_depth", 0),
-                "max_gap": metrics.get("max_gap", 0),
-            }
-            record_market_tick(
-                market_id=market_id,
-                yes_price=yes_price,
-                no_price=no_price,
-                volume=0.0,
-                depth_summary=depth_summary,
-            )
+            # Only record if we have valid price data from order book
+            yes_price = yes_bids[0][0] if yes_bids else None
+            no_price = no_bids[0][0] if no_bids else None
+
+            if yes_price is not None and no_price is not None:
+                depth_summary = {
+                    "total_depth": metrics.get("total_depth", 0),
+                    "yes_depth": metrics.get("yes_depth", 0),
+                    "no_depth": metrics.get("no_depth", 0),
+                    "max_gap": metrics.get("max_gap", 0),
+                }
+                record_market_tick(
+                    market_id=market_id,
+                    yes_price=yes_price,
+                    no_price=no_price,
+                    volume=0.0,
+                    depth_summary=depth_summary,
+                )
 
             # Detect signals
             signals = detect_depth_signals(metrics, depth_config)
