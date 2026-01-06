@@ -1,0 +1,283 @@
+"""
+Unit tests for depth_scanner module.
+
+Tests the analyze_depth function with various orderbook configurations.
+"""
+
+import unittest
+
+from app.core.depth_scanner import analyze_depth
+
+
+class TestAnalyzeDepth(unittest.TestCase):
+    """Test analyze_depth function."""
+
+    def test_basic_orderbook(self):
+        """Test analysis of a basic orderbook with bids and asks."""
+        orderbook = {
+            "bids": [
+                {"price": "0.45", "size": "100"},
+                {"price": "0.44", "size": "200"},
+            ],
+            "asks": [
+                {"price": "0.55", "size": "150"},
+                {"price": "0.56", "size": "250"},
+            ],
+        }
+
+        metrics = analyze_depth(orderbook)
+
+        # Total YES depth = 100 + 200 + 150 + 250 = 700
+        self.assertEqual(metrics["total_yes_depth"], 700.0)
+        # For binary markets, NO depth equals YES depth
+        self.assertEqual(metrics["total_no_depth"], 700.0)
+        # YES gap = 0.55 - 0.45 = 0.10
+        self.assertAlmostEqual(metrics["top_gap_yes"], 0.10, places=6)
+        # NO gap should equal YES gap for binary markets
+        self.assertAlmostEqual(metrics["top_gap_no"], 0.10, places=6)
+        # Imbalance = YES - NO = 0
+        self.assertEqual(metrics["imbalance"], 0.0)
+
+    def test_empty_orderbook(self):
+        """Test analysis of an empty orderbook."""
+        orderbook = {"bids": [], "asks": []}
+
+        metrics = analyze_depth(orderbook)
+
+        self.assertEqual(metrics["total_yes_depth"], 0.0)
+        self.assertEqual(metrics["total_no_depth"], 0.0)
+        self.assertEqual(metrics["top_gap_yes"], 0.0)
+        self.assertEqual(metrics["top_gap_no"], 0.0)
+        self.assertEqual(metrics["imbalance"], 0.0)
+
+    def test_orderbook_with_only_bids(self):
+        """Test analysis of orderbook with only bids."""
+        orderbook = {
+            "bids": [
+                {"price": "0.40", "size": "100"},
+                {"price": "0.35", "size": "200"},
+            ],
+            "asks": [],
+        }
+
+        metrics = analyze_depth(orderbook)
+
+        # Total depth = 100 + 200 = 300
+        self.assertEqual(metrics["total_yes_depth"], 300.0)
+        self.assertEqual(metrics["total_no_depth"], 300.0)
+        # No gap calculation without asks
+        self.assertEqual(metrics["top_gap_yes"], 0.0)
+        self.assertEqual(metrics["top_gap_no"], 0.0)
+        self.assertEqual(metrics["imbalance"], 0.0)
+
+    def test_orderbook_with_only_asks(self):
+        """Test analysis of orderbook with only asks."""
+        orderbook = {
+            "bids": [],
+            "asks": [
+                {"price": "0.60", "size": "100"},
+                {"price": "0.65", "size": "200"},
+            ],
+        }
+
+        metrics = analyze_depth(orderbook)
+
+        # Total depth = 100 + 200 = 300
+        self.assertEqual(metrics["total_yes_depth"], 300.0)
+        self.assertEqual(metrics["total_no_depth"], 300.0)
+        # No gap calculation without bids
+        self.assertEqual(metrics["top_gap_yes"], 0.0)
+        self.assertEqual(metrics["top_gap_no"], 0.0)
+        self.assertEqual(metrics["imbalance"], 0.0)
+
+    def test_single_bid_and_ask(self):
+        """Test analysis with single bid and ask."""
+        orderbook = {
+            "bids": [{"price": "0.50", "size": "100"}],
+            "asks": [{"price": "0.52", "size": "100"}],
+        }
+
+        metrics = analyze_depth(orderbook)
+
+        self.assertEqual(metrics["total_yes_depth"], 200.0)
+        self.assertEqual(metrics["total_no_depth"], 200.0)
+        # YES gap = 0.52 - 0.50 = 0.02
+        self.assertAlmostEqual(metrics["top_gap_yes"], 0.02, places=6)
+        self.assertAlmostEqual(metrics["top_gap_no"], 0.02, places=6)
+        self.assertEqual(metrics["imbalance"], 0.0)
+
+    def test_narrow_spread(self):
+        """Test orderbook with narrow bid-ask spread."""
+        orderbook = {
+            "bids": [
+                {"price": "0.495", "size": "500"},
+                {"price": "0.490", "size": "300"},
+            ],
+            "asks": [
+                {"price": "0.505", "size": "400"},
+                {"price": "0.510", "size": "200"},
+            ],
+        }
+
+        metrics = analyze_depth(orderbook)
+
+        self.assertEqual(metrics["total_yes_depth"], 1400.0)
+        self.assertEqual(metrics["total_no_depth"], 1400.0)
+        # Narrow gap = 0.505 - 0.495 = 0.01
+        self.assertAlmostEqual(metrics["top_gap_yes"], 0.01, places=6)
+        self.assertAlmostEqual(metrics["top_gap_no"], 0.01, places=6)
+        self.assertEqual(metrics["imbalance"], 0.0)
+
+    def test_wide_spread(self):
+        """Test orderbook with wide bid-ask spread."""
+        orderbook = {
+            "bids": [
+                {"price": "0.30", "size": "1000"},
+                {"price": "0.25", "size": "500"},
+            ],
+            "asks": [
+                {"price": "0.70", "size": "800"},
+                {"price": "0.75", "size": "600"},
+            ],
+        }
+
+        metrics = analyze_depth(orderbook)
+
+        self.assertEqual(metrics["total_yes_depth"], 2900.0)
+        self.assertEqual(metrics["total_no_depth"], 2900.0)
+        # Wide gap = 0.70 - 0.30 = 0.40
+        self.assertAlmostEqual(metrics["top_gap_yes"], 0.40, places=6)
+        self.assertAlmostEqual(metrics["top_gap_no"], 0.40, places=6)
+        self.assertEqual(metrics["imbalance"], 0.0)
+
+    def test_unsorted_bids_and_asks(self):
+        """Test that function correctly handles unsorted orderbook."""
+        orderbook = {
+            "bids": [
+                {"price": "0.44", "size": "200"},
+                {"price": "0.45", "size": "100"},  # Best bid (highest)
+                {"price": "0.43", "size": "300"},
+            ],
+            "asks": [
+                {"price": "0.56", "size": "250"},
+                {"price": "0.57", "size": "150"},
+                {"price": "0.55", "size": "200"},  # Best ask (lowest)
+            ],
+        }
+
+        metrics = analyze_depth(orderbook)
+
+        # Total depth = 200 + 100 + 300 + 250 + 150 + 200 = 1200
+        self.assertEqual(metrics["total_yes_depth"], 1200.0)
+        self.assertEqual(metrics["total_no_depth"], 1200.0)
+        # Gap should be calculated from best bid (0.45) and best ask (0.55)
+        self.assertAlmostEqual(metrics["top_gap_yes"], 0.10, places=6)
+        self.assertAlmostEqual(metrics["top_gap_no"], 0.10, places=6)
+        self.assertEqual(metrics["imbalance"], 0.0)
+
+    def test_orderbook_with_zero_sizes(self):
+        """Test orderbook containing orders with zero size."""
+        orderbook = {
+            "bids": [
+                {"price": "0.45", "size": "100"},
+                {"price": "0.44", "size": "0"},  # Zero size
+            ],
+            "asks": [
+                {"price": "0.55", "size": "0"},  # Zero size
+                {"price": "0.56", "size": "200"},
+            ],
+        }
+
+        metrics = analyze_depth(orderbook)
+
+        # Total depth = 100 + 0 + 0 + 200 = 300
+        self.assertEqual(metrics["total_yes_depth"], 300.0)
+        self.assertEqual(metrics["total_no_depth"], 300.0)
+        # Gap calculated from best bid and ask (ignoring zero sizes is OK)
+        self.assertAlmostEqual(metrics["top_gap_yes"], 0.10, places=6)
+        self.assertAlmostEqual(metrics["top_gap_no"], 0.10, places=6)
+
+    def test_orderbook_with_missing_keys(self):
+        """Test graceful handling of missing bids/asks keys."""
+        orderbook = {}
+
+        metrics = analyze_depth(orderbook)
+
+        self.assertEqual(metrics["total_yes_depth"], 0.0)
+        self.assertEqual(metrics["total_no_depth"], 0.0)
+        self.assertEqual(metrics["top_gap_yes"], 0.0)
+        self.assertEqual(metrics["top_gap_no"], 0.0)
+        self.assertEqual(metrics["imbalance"], 0.0)
+
+    def test_orderbook_with_missing_price_or_size(self):
+        """Test handling of orders with missing price or size fields."""
+        orderbook = {
+            "bids": [
+                {"price": "0.45", "size": "100"},
+                {"price": "0.44"},  # Missing size
+                {"size": "50"},  # Missing price
+            ],
+            "asks": [
+                {"price": "0.55", "size": "150"},
+                {},  # Empty order
+            ],
+        }
+
+        metrics = analyze_depth(orderbook)
+
+        # Should handle missing fields gracefully, treating them as 0
+        # Total depth = 100 + 0 + 50 + 150 + 0 = 300
+        # Note: Size is counted even if price is missing (contributes to depth)
+        self.assertEqual(metrics["total_yes_depth"], 300.0)
+        self.assertEqual(metrics["total_no_depth"], 300.0)
+        # Gap calculation may be affected by orders with missing prices
+        # (best ask could be 0 from empty order, giving negative gap)
+        # This is expected behavior for malformed data
+        self.assertIsInstance(metrics["top_gap_yes"], float)
+        self.assertIsInstance(metrics["top_gap_no"], float)
+
+    def test_large_orderbook(self):
+        """Test with a larger orderbook."""
+        bids = [{"price": str(0.50 - i * 0.01), "size": str(100 * (i + 1))} for i in range(10)]
+        asks = [{"price": str(0.51 + i * 0.01), "size": str(100 * (i + 1))} for i in range(10)]
+
+        orderbook = {"bids": bids, "asks": asks}
+
+        metrics = analyze_depth(orderbook)
+
+        # Total depth = sum of all sizes
+        # Bids: 100 + 200 + 300 + ... + 1000 = 5500
+        # Asks: 100 + 200 + 300 + ... + 1000 = 5500
+        # Total: 11000
+        self.assertEqual(metrics["total_yes_depth"], 11000.0)
+        self.assertEqual(metrics["total_no_depth"], 11000.0)
+        # Gap = 0.51 - 0.50 = 0.01
+        self.assertAlmostEqual(metrics["top_gap_yes"], 0.01, places=6)
+        self.assertAlmostEqual(metrics["top_gap_no"], 0.01, places=6)
+        self.assertEqual(metrics["imbalance"], 0.0)
+
+    def test_all_metrics_present(self):
+        """Test that all expected metrics are present in the result."""
+        orderbook = {
+            "bids": [{"price": "0.45", "size": "100"}],
+            "asks": [{"price": "0.55", "size": "100"}],
+        }
+
+        metrics = analyze_depth(orderbook)
+
+        # Verify all expected keys are present
+        expected_keys = [
+            "total_yes_depth",
+            "total_no_depth",
+            "top_gap_yes",
+            "top_gap_no",
+            "imbalance",
+        ]
+
+        for key in expected_keys:
+            self.assertIn(key, metrics)
+            self.assertIsInstance(metrics[key], float)
+
+
+if __name__ == "__main__":
+    unittest.main()
