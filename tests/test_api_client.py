@@ -55,6 +55,47 @@ class TestNormalizedOrderBook(unittest.TestCase):
         result = orderbook.to_dict()
         self.assertIsNone(result["timestamp"])
 
+    def test_to_dict_with_depth_levels(self):
+        """Test conversion to dictionary with depth levels."""
+        timestamp = datetime(2024, 1, 1, 12, 0, 0)
+        orderbook = NormalizedOrderBook(
+            yes_best_bid=0.45,
+            yes_best_ask=0.55,
+            no_best_bid=0.45,
+            no_best_ask=0.55,
+            market_id="test_market",
+            timestamp=timestamp,
+            yes_bids=[[0.45, 100.0], [0.44, 200.0]],
+            yes_asks=[[0.55, 150.0], [0.56, 250.0]],
+            no_bids=[[0.45, 150.0], [0.44, 250.0]],
+            no_asks=[[0.55, 100.0], [0.56, 200.0]],
+        )
+
+        result = orderbook.to_dict()
+
+        # Verify all fields are present
+        self.assertEqual(result["yes_best_bid"], 0.45)
+        self.assertEqual(result["yes_best_ask"], 0.55)
+        self.assertEqual(result["market_id"], "test_market")
+
+        # Verify depth levels
+        self.assertIn("yes_bids", result)
+        self.assertEqual(result["yes_bids"], [[0.45, 100.0], [0.44, 200.0]])
+        self.assertIn("yes_asks", result)
+        self.assertEqual(result["yes_asks"], [[0.55, 150.0], [0.56, 250.0]])
+        self.assertIn("no_bids", result)
+        self.assertEqual(result["no_bids"], [[0.45, 150.0], [0.44, 250.0]])
+        self.assertIn("no_asks", result)
+        self.assertEqual(result["no_asks"], [[0.55, 100.0], [0.56, 200.0]])
+
+    def test_default_values_with_depth_fields(self):
+        """Test that depth level fields default to None."""
+        orderbook = NormalizedOrderBook()
+        self.assertIsNone(orderbook.yes_bids)
+        self.assertIsNone(orderbook.yes_asks)
+        self.assertIsNone(orderbook.no_bids)
+        self.assertIsNone(orderbook.no_asks)
+
 
 class TestNormalizeOrderbookFromJson(unittest.TestCase):
     """Test the normalize_orderbook_from_json utility function."""
@@ -185,6 +226,111 @@ class TestNormalizeOrderbookFromJson(unittest.TestCase):
 
         self.assertEqual(result.yes_best_bid, 0.45)
         self.assertEqual(result.yes_best_ask, 0.55)
+
+    def test_parse_with_depth_levels(self):
+        """Test parsing orderbook with depth levels."""
+        sample_json = {
+            "bids": [
+                {"price": "0.45", "size": "100"},
+                {"price": "0.44", "size": "200"},
+                {"price": "0.43", "size": "300"},
+                {"price": "0.42", "size": "400"},
+                {"price": "0.41", "size": "500"},
+                {"price": "0.40", "size": "600"},  # Should not be included with depth=5
+            ],
+            "asks": [
+                {"price": "0.55", "size": "150"},
+                {"price": "0.56", "size": "250"},
+                {"price": "0.57", "size": "350"},
+                {"price": "0.58", "size": "450"},
+                {"price": "0.59", "size": "550"},
+                {"price": "0.60", "size": "650"},  # Should not be included with depth=5
+            ],
+        }
+
+        result = normalize_orderbook_from_json(sample_json, "test_market", depth=5)
+
+        # Verify YES bids (top 5)
+        self.assertIsNotNone(result.yes_bids)
+        self.assertEqual(len(result.yes_bids), 5)
+        self.assertEqual(result.yes_bids[0], [0.45, 100.0])
+        self.assertEqual(result.yes_bids[1], [0.44, 200.0])
+        self.assertEqual(result.yes_bids[4], [0.41, 500.0])
+
+        # Verify YES asks (top 5)
+        self.assertIsNotNone(result.yes_asks)
+        self.assertEqual(len(result.yes_asks), 5)
+        self.assertEqual(result.yes_asks[0], [0.55, 150.0])
+        self.assertEqual(result.yes_asks[1], [0.56, 250.0])
+        self.assertEqual(result.yes_asks[4], [0.59, 550.0])
+
+        # Verify NO bids (derived from YES asks)
+        self.assertIsNotNone(result.no_bids)
+        self.assertEqual(len(result.no_bids), 5)
+        self.assertEqual(result.no_bids[0], [0.45, 150.0])  # 1 - 0.55 = 0.45
+        self.assertEqual(result.no_bids[1], [0.44, 250.0])  # 1 - 0.56 = 0.44
+
+        # Verify NO asks (derived from YES bids)
+        self.assertIsNotNone(result.no_asks)
+        self.assertEqual(len(result.no_asks), 5)
+        self.assertEqual(result.no_asks[0], [0.55, 100.0])  # 1 - 0.45 = 0.55
+        self.assertEqual(result.no_asks[1], [0.56, 200.0])  # 1 - 0.44 = 0.56
+
+    def test_parse_with_custom_depth(self):
+        """Test parsing orderbook with custom depth parameter."""
+        sample_json = {
+            "bids": [
+                {"price": "0.45", "size": "100"},
+                {"price": "0.44", "size": "200"},
+                {"price": "0.43", "size": "300"},
+            ],
+            "asks": [
+                {"price": "0.55", "size": "150"},
+                {"price": "0.56", "size": "250"},
+                {"price": "0.57", "size": "350"},
+            ],
+        }
+
+        # Test with depth=2
+        result = normalize_orderbook_from_json(sample_json, "test_market", depth=2)
+
+        self.assertIsNotNone(result.yes_bids)
+        self.assertEqual(len(result.yes_bids), 2)
+        self.assertEqual(result.yes_bids[0], [0.45, 100.0])
+        self.assertEqual(result.yes_bids[1], [0.44, 200.0])
+
+        self.assertIsNotNone(result.yes_asks)
+        self.assertEqual(len(result.yes_asks), 2)
+        self.assertEqual(result.yes_asks[0], [0.55, 150.0])
+        self.assertEqual(result.yes_asks[1], [0.56, 250.0])
+
+    def test_depth_levels_with_fewer_orders(self):
+        """Test that depth levels work when fewer orders than depth."""
+        sample_json = {
+            "bids": [
+                {"price": "0.45", "size": "100"},
+                {"price": "0.44", "size": "200"},
+            ],
+            "asks": [
+                {"price": "0.55", "size": "150"},
+            ],
+        }
+
+        result = normalize_orderbook_from_json(sample_json, "test_market", depth=5)
+
+        # Should only include available orders
+        self.assertIsNotNone(result.yes_bids)
+        self.assertEqual(len(result.yes_bids), 2)
+
+        self.assertIsNotNone(result.yes_asks)
+        self.assertEqual(len(result.yes_asks), 1)
+
+        # NO levels should match YES levels in count
+        self.assertIsNotNone(result.no_bids)
+        self.assertEqual(len(result.no_bids), 1)
+
+        self.assertIsNotNone(result.no_asks)
+        self.assertEqual(len(result.no_asks), 2)
 
 
 class TestPolymarketAPIClientInit(unittest.TestCase):
