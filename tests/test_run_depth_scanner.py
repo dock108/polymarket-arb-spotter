@@ -138,11 +138,14 @@ class TestDepthScannerRunner(unittest.TestCase):
         signal_hash = runner._compute_signal_hash("market_1", signal)
         self.assertIn(signal_hash, runner._signal_dedupe)
 
-        # Manually set timestamp to be stale
+        # Manually set timestamp to be stale.
+        # The cleanup removes entries older than DEDUPE_WINDOW_SECONDS * 2,
+        # so we use * 3 to ensure the entry is definitely considered stale.
         from datetime import timedelta
 
+        STALE_MULTIPLIER = 3
         runner._signal_dedupe[signal_hash] = datetime.now() - timedelta(
-            seconds=runner.DEDUPE_WINDOW_SECONDS * 3
+            seconds=runner.DEDUPE_WINDOW_SECONDS * STALE_MULTIPLIER
         )
 
         # Run cleanup

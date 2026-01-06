@@ -140,11 +140,11 @@ class DepthScannerRunner:
             signal: DepthSignal object
 
         Returns:
-            Hash string for the signal
+            Hash string for the signal (128 bits / 32 hex characters)
         """
         # Create a unique key based on market_id and signal_type
         key = f"{market_id}|{signal.signal_type}"
-        return hashlib.sha256(key.encode()).hexdigest()[:16]
+        return hashlib.sha256(key.encode()).hexdigest()[:32]
 
     def _is_signal_duplicate(self, market_id: str, signal: DepthSignal) -> bool:
         """
