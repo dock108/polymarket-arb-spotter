@@ -331,9 +331,9 @@ class TestGlobalFunctions(unittest.TestCase):
         mock_response.raise_for_status = MagicMock()
         mock_post.return_value = mock_response
         
-        # Clear global service instance
-        import app.core.notifications
-        app.core.notifications._notification_service = None
+        # Reset global service instance
+        from app.core.notifications import _reset_notification_service
+        _reset_notification_service()
         
         alert = {
             'market_id': 'test_market',
@@ -353,9 +353,9 @@ class TestGlobalFunctions(unittest.TestCase):
         mock_config = Config(alert_method=None)
         mock_get_config.return_value = mock_config
         
-        # Clear global service instance
-        import app.core.notifications
-        app.core.notifications._notification_service = None
+        # Reset global service instance
+        from app.core.notifications import _reset_notification_service
+        _reset_notification_service()
         
         service1 = get_notification_service()
         service2 = get_notification_service()

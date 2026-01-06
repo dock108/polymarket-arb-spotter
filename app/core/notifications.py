@@ -11,11 +11,10 @@ of missing credentials.
 
 import logging
 import smtplib
-import time
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from typing import Dict, Any, Optional
-from datetime import datetime, timedelta
+from datetime import datetime
 
 import requests
 
@@ -290,6 +289,16 @@ def get_notification_service() -> NotificationService:
     if _notification_service is None:
         _notification_service = NotificationService()
     return _notification_service
+
+
+def _reset_notification_service() -> None:
+    """
+    Reset the global notification service instance.
+    
+    This is primarily for testing purposes.
+    """
+    global _notification_service
+    _notification_service = None
 
 
 def send_alert(alert_object: Dict[str, Any]) -> bool:
