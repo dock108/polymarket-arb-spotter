@@ -8,9 +8,9 @@ sending notifications. Includes persistent JSON storage for alerts.
 
 import json
 import os
+import uuid
 from dataclasses import dataclass
 from datetime import datetime
-from pathlib import Path
 from typing import Dict, Any, Optional, Literal, List
 from app.core.logger import logger
 
@@ -84,6 +84,9 @@ def create_price_alert(
     # Validate inputs
     if not market_id or not isinstance(market_id, str):
         raise ValueError("market_id must be a non-empty string")
+    
+    if not market_id.strip():
+        raise ValueError("market_id cannot be only whitespace")
 
     if direction not in ["above", "below"]:
         raise ValueError("direction must be 'above' or 'below'")
@@ -318,13 +321,11 @@ def add_alert(
     Raises:
         ValueError: If inputs are invalid or alert_id already exists
     """
-    # Validate inputs using existing validation
-    _validate_market_id_format(market_id)
+    # Validate inputs using existing validation in create_price_alert
     alert = create_price_alert(market_id, direction, target_price)
     
     # Generate alert ID if not provided
     if alert_id is None:
-        import uuid
         alert_id = str(uuid.uuid4())
     
     # Load existing alerts

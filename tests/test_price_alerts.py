@@ -7,7 +7,9 @@ and persistent JSON storage.
 
 import json
 import os
+import shutil
 import tempfile
+import time
 import unittest
 from datetime import datetime
 from app.core.price_alerts import (
@@ -399,7 +401,6 @@ class TestLoadSaveAlerts(unittest.TestCase):
 
     def tearDown(self):
         """Clean up temporary files."""
-        import shutil
         shutil.rmtree(self.temp_dir, ignore_errors=True)
 
     def test_save_and_load_alerts(self):
@@ -457,7 +458,6 @@ class TestAddAlert(unittest.TestCase):
 
     def tearDown(self):
         """Clean up temporary files."""
-        import shutil
         shutil.rmtree(self.temp_dir, ignore_errors=True)
 
     def test_add_alert_basic(self):
@@ -560,7 +560,6 @@ class TestRemoveAlert(unittest.TestCase):
 
     def tearDown(self):
         """Clean up temporary files."""
-        import shutil
         shutil.rmtree(self.temp_dir, ignore_errors=True)
 
     def test_remove_alert_success(self):
@@ -617,7 +616,6 @@ class TestListAlerts(unittest.TestCase):
 
     def tearDown(self):
         """Clean up temporary files."""
-        import shutil
         shutil.rmtree(self.temp_dir, ignore_errors=True)
 
     def test_list_empty_alerts(self):
@@ -652,8 +650,6 @@ class TestListAlerts(unittest.TestCase):
 
     def test_list_alerts_sorted_by_time(self):
         """Test that alerts are sorted by creation time (newest first)."""
-        import time
-
         # Add alerts with slight delays
         add_alert(
             "market_1", "above", 0.60,
@@ -691,7 +687,6 @@ class TestAlertPersistence(unittest.TestCase):
 
     def tearDown(self):
         """Clean up temporary files."""
-        import shutil
         shutil.rmtree(self.temp_dir, ignore_errors=True)
 
     def test_alerts_persist_across_sessions(self):
