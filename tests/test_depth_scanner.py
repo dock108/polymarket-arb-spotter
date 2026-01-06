@@ -242,8 +242,14 @@ class TestAnalyzeDepth(unittest.TestCase):
 
     def test_large_orderbook(self):
         """Test with a larger orderbook."""
-        bids = [{"price": str(0.50 - i * 0.01), "size": str(100 * (i + 1))} for i in range(10)]
-        asks = [{"price": str(0.51 + i * 0.01), "size": str(100 * (i + 1))} for i in range(10)]
+        bids = [
+            {"price": str(0.50 - i * 0.01), "size": str(100 * (i + 1))}
+            for i in range(10)
+        ]
+        asks = [
+            {"price": str(0.51 + i * 0.01), "size": str(100 * (i + 1))}
+            for i in range(10)
+        ]
 
         orderbook = {"bids": bids, "asks": asks}
 

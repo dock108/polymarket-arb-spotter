@@ -21,7 +21,7 @@ from app.core.logger import logger
 @dataclass
 class NormalizedOrderBook:
     """Normalized order book with best bid/ask for yes and no outcomes.
-    
+
     Optionally includes depth levels (top N bids/asks) for more detailed analysis.
     """
 
@@ -31,12 +31,12 @@ class NormalizedOrderBook:
     no_best_ask: Optional[float] = None
     market_id: str = ""
     timestamp: Optional[datetime] = None
-    
+
     # Depth levels: lists of [price, size] pairs
     yes_bids: Optional[List[List[float]]] = None  # [[price, size], ...]
     yes_asks: Optional[List[List[float]]] = None  # [[price, size], ...]
-    no_bids: Optional[List[List[float]]] = None   # [[price, size], ...]
-    no_asks: Optional[List[List[float]]] = None   # [[price, size], ...]
+    no_bids: Optional[List[List[float]]] = None  # [[price, size], ...]
+    no_asks: Optional[List[List[float]]] = None  # [[price, size], ...]
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary representation."""
@@ -48,7 +48,7 @@ class NormalizedOrderBook:
             "market_id": self.market_id,
             "timestamp": self.timestamp.isoformat() if self.timestamp else None,
         }
-        
+
         # Include depth levels if present
         if self.yes_bids is not None:
             result["yes_bids"] = self.yes_bids
@@ -58,7 +58,7 @@ class NormalizedOrderBook:
             result["no_bids"] = self.no_bids
         if self.no_asks is not None:
             result["no_asks"] = self.no_asks
-            
+
         return result
 
 
@@ -293,7 +293,7 @@ class PolymarketAPIClient:
             if sorted_bids:
                 # Set best bid (highest price)
                 normalized.yes_best_bid = float(sorted_bids[0].get("price", 0))
-                
+
                 # Extract top N levels for YES bids
                 normalized.yes_bids = [
                     [float(bid.get("price", 0)), float(bid.get("size", 0))]
@@ -308,7 +308,7 @@ class PolymarketAPIClient:
             if sorted_asks:
                 # Set best ask (lowest price)
                 normalized.yes_best_ask = float(sorted_asks[0].get("price", 0))
-                
+
                 # Extract top N levels for YES asks
                 normalized.yes_asks = [
                     [float(ask.get("price", 0)), float(ask.get("size", 0))]
@@ -325,20 +325,18 @@ class PolymarketAPIClient:
             # If I can sell YES at yes_best_bid, that implies I can buy NO at (1 - yes_best_bid)
             # So no_best_ask = 1 - yes_best_bid
             normalized.no_best_ask = round(1.0 - normalized.yes_best_bid, 4)
-        
+
         # Derive NO depth levels from YES depth levels
         # NO bids are derived from YES asks (buying NO = selling YES)
         if normalized.yes_asks is not None:
             normalized.no_bids = [
-                [round(1.0 - price, 4), size]
-                for price, size in normalized.yes_asks
+                [round(1.0 - price, 4), size] for price, size in normalized.yes_asks
             ]
-        
+
         # NO asks are derived from YES bids (selling NO = buying YES)
         if normalized.yes_bids is not None:
             normalized.no_asks = [
-                [round(1.0 - price, 4), size]
-                for price, size in normalized.yes_bids
+                [round(1.0 - price, 4), size] for price, size in normalized.yes_bids
             ]
 
         return normalized
@@ -587,9 +585,7 @@ class PolymarketAPIClient:
             logger.error(f"Failed to decode market details response: {e}")
             return None
 
-    def get_orderbook(
-        self, market_id: str, depth: int = 5
-    ) -> Optional[Dict[str, Any]]:
+    def get_orderbook(self, market_id: str, depth: int = 5) -> Optional[Dict[str, Any]]:
         """
         Fetch orderbook data for a market.
 
@@ -696,7 +692,7 @@ def normalize_orderbook_from_json(
         sorted_bids = sorted(bids, key=lambda x: float(x.get("price", 0)), reverse=True)
         if sorted_bids:
             normalized.yes_best_bid = float(sorted_bids[0].get("price", 0))
-            
+
             # Extract top N levels for YES bids
             normalized.yes_bids = [
                 [float(bid.get("price", 0)), float(bid.get("size", 0))]
@@ -709,7 +705,7 @@ def normalize_orderbook_from_json(
         sorted_asks = sorted(asks, key=lambda x: float(x.get("price", 0)))
         if sorted_asks:
             normalized.yes_best_ask = float(sorted_asks[0].get("price", 0))
-            
+
             # Extract top N levels for YES asks
             normalized.yes_asks = [
                 [float(ask.get("price", 0)), float(ask.get("size", 0))]
@@ -722,18 +718,16 @@ def normalize_orderbook_from_json(
 
     if normalized.yes_best_bid is not None:
         normalized.no_best_ask = round(1.0 - normalized.yes_best_bid, 4)
-    
+
     # Derive NO depth levels from YES depth levels
     if normalized.yes_asks is not None:
         normalized.no_bids = [
-            [round(1.0 - price, 4), size]
-            for price, size in normalized.yes_asks
+            [round(1.0 - price, 4), size] for price, size in normalized.yes_asks
         ]
-    
+
     if normalized.yes_bids is not None:
         normalized.no_asks = [
-            [round(1.0 - price, 4), size]
-            for price, size in normalized.yes_bids
+            [round(1.0 - price, 4), size] for price, size in normalized.yes_bids
         ]
 
     return normalized

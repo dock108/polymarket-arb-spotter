@@ -77,7 +77,7 @@ class TestNormalizedOrderBook(unittest.TestCase):
         self.assertEqual(result["yes_best_bid"], 0.45)
         self.assertEqual(result["yes_best_ask"], 0.55)
         self.assertEqual(result["market_id"], "test_market")
-        
+
         # Verify depth levels
         self.assertIn("yes_bids", result)
         self.assertEqual(result["yes_bids"], [[0.45, 100.0], [0.44, 200.0]])
