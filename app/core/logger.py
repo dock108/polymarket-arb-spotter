@@ -4,6 +4,7 @@ Logging configuration and utilities for the Polymarket Arbitrage Spotter.
 Includes structured logging for arbitrage events using SQLite database.
 """
 
+import json
 import logging
 import sys
 import threading
@@ -124,6 +125,20 @@ def init_db(db_path: str = _DB_PATH) -> None:
             pk="id",
         )
 
+    # Create depth_events table with schema if it doesn't exist
+    if "depth_events" not in db.table_names():
+        db["depth_events"].create(
+            {
+                "timestamp": str,
+                "market_id": str,
+                "metrics": str,  # JSON string containing depth metrics
+                "signal_type": str,
+                "threshold_hit": str,
+                "mode": str,
+            },
+            pk="id",
+        )
+
 
 def log_event(data: Dict[str, Any], db_path: str = _DB_PATH) -> None:
     """
@@ -175,7 +190,7 @@ def _get_table_columns(db: Database, table_name: str) -> List[str]:
         ValueError: If table_name is not in the allowed list
     """
     # Whitelist of allowed table names to prevent SQL injection
-    allowed_tables = {"arbitrage_events", "price_alert_events"}
+    allowed_tables = {"arbitrage_events", "price_alert_events", "depth_events"}
     if table_name not in allowed_tables:
         raise ValueError(f"Invalid table name: {table_name}")
 
@@ -292,6 +307,92 @@ def fetch_recent_price_alerts(
 
     except Exception as e:
         logger.error(f"Error fetching recent price alert events: {e}", exc_info=True)
+        return []
+
+
+def log_depth_event(data: Dict[str, Any], db_path: str = _DB_PATH) -> None:
+    """
+    Log a depth event to the database.
+
+    Args:
+        data: Dictionary containing the depth event data with keys:
+            - timestamp (datetime or str): When the depth event occurred
+            - market_id (str): Unique identifier of the market
+            - metrics (dict): Dictionary containing depth metrics (will be JSON serialized)
+            - signal_type (str): Type of depth signal (e.g., "thin_depth", "large_gap", "strong_imbalance")
+            - threshold_hit (str): Description of the threshold that was hit
+            - mode (str): Mode of operation ("mock" or "live")
+        db_path: Path to the SQLite database file
+    """
+    try:
+        db = Database(db_path)
+
+        # Convert timestamp to string if it's a datetime object
+        event_data = data.copy()
+        if hasattr(event_data.get("timestamp"), "isoformat"):
+            event_data["timestamp"] = event_data["timestamp"].isoformat()
+
+        # Serialize metrics dict to JSON string if it's a dict
+        if isinstance(event_data.get("metrics"), dict):
+            event_data["metrics"] = json.dumps(event_data["metrics"])
+
+        db["depth_events"].insert(event_data)
+
+    except Exception as e:
+        logger.error(f"Error logging depth event to database: {e}", exc_info=True)
+        # Don't re-raise to allow continued processing
+
+
+def fetch_recent_depth_events(
+    limit: int = 100, db_path: str = _DB_PATH
+) -> List[Dict[str, Any]]:
+    """
+    Fetch the most recent depth events from the database.
+
+    Args:
+        limit: Maximum number of entries to retrieve (default: 100)
+        db_path: Path to the SQLite database file
+
+    Returns:
+        List of dictionaries containing the depth event data,
+        ordered by timestamp in descending order (most recent first).
+        The 'metrics' field is deserialized from JSON to a dictionary.
+    """
+    try:
+        db = Database(db_path)
+
+        # Check if table exists
+        if "depth_events" not in db.table_names():
+            return []
+
+        # Fetch recent entries ordered by timestamp descending using SQL
+        rows = db.execute(
+            "SELECT * FROM depth_events ORDER BY timestamp DESC LIMIT ?",
+            [limit],
+        ).fetchall()
+
+        # Convert to list of dictionaries
+        if not rows:
+            return []
+
+        # Get column names
+        columns = _get_table_columns(db, "depth_events")
+
+        results = []
+        for row in rows:
+            row_dict = dict(zip(columns, row))
+            # Deserialize metrics JSON string to dict
+            if row_dict.get("metrics"):
+                try:
+                    row_dict["metrics"] = json.loads(row_dict["metrics"])
+                except (json.JSONDecodeError, TypeError):
+                    pass  # Keep as string if deserialization fails
+            results.append(row_dict)
+
+        return results
+
+    except Exception as e:
+        logger.error(f"Error fetching recent depth events: {e}", exc_info=True)
         return []
 
 
