@@ -3,13 +3,24 @@ Price alert functionality for Polymarket markets.
 
 Implements functions to watch selected markets and trigger alerts when
 price crosses user-defined thresholds. Returns alert objects without
-sending notifications.
+sending notifications. Includes persistent JSON storage for alerts.
 """
 
+import json
+import os
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Dict, Any, Optional, Literal
+from pathlib import Path
+from typing import Dict, Any, Optional, Literal, List
 from app.core.logger import logger
+
+
+# Default storage path for price alerts
+ALERTS_STORAGE_PATH = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
+    "data",
+    "price_alerts.json"
+)
 
 
 @dataclass
@@ -201,3 +212,200 @@ def watch_market_price(
 
     # Check the alert
     return check_price_alert(alert, current_price)
+
+
+# ============================================================================
+# Persistent Storage Functions
+# ============================================================================
+
+
+def _validate_market_id_format(market_id: str) -> None:
+    """
+    Validate market_id format.
+    
+    Market IDs should be non-empty strings. This function can be extended
+    to enforce more specific format requirements if needed.
+    
+    Args:
+        market_id: Market ID to validate
+        
+    Raises:
+        ValueError: If market_id format is invalid
+    """
+    if not market_id or not isinstance(market_id, str):
+        raise ValueError("market_id must be a non-empty string")
+    
+    if not market_id.strip():
+        raise ValueError("market_id cannot be only whitespace")
+
+
+def _load_alerts(storage_path: str = ALERTS_STORAGE_PATH) -> Dict[str, Dict[str, Any]]:
+    """
+    Load alerts from JSON file.
+    
+    Args:
+        storage_path: Path to JSON storage file
+        
+    Returns:
+        Dictionary mapping alert IDs to alert data
+    """
+    # Ensure data directory exists
+    os.makedirs(os.path.dirname(storage_path), exist_ok=True)
+    
+    # Create file if it doesn't exist
+    if not os.path.exists(storage_path):
+        logger.info(f"Creating new alerts storage file at {storage_path}")
+        _save_alerts({}, storage_path)
+        return {}
+    
+    try:
+        with open(storage_path, 'r') as f:
+            alerts = json.load(f)
+            logger.debug(f"Loaded {len(alerts)} alerts from {storage_path}")
+            return alerts
+    except json.JSONDecodeError as e:
+        logger.error(f"Error decoding JSON from {storage_path}: {e}")
+        # Backup corrupted file and create new one
+        backup_path = f"{storage_path}.backup"
+        os.rename(storage_path, backup_path)
+        logger.warning(f"Corrupted file backed up to {backup_path}")
+        return {}
+    except Exception as e:
+        logger.error(f"Error loading alerts from {storage_path}: {e}")
+        return {}
+
+
+def _save_alerts(alerts: Dict[str, Dict[str, Any]], storage_path: str = ALERTS_STORAGE_PATH) -> None:
+    """
+    Save alerts to JSON file.
+    
+    Args:
+        alerts: Dictionary mapping alert IDs to alert data
+        storage_path: Path to JSON storage file
+    """
+    # Ensure data directory exists
+    os.makedirs(os.path.dirname(storage_path), exist_ok=True)
+    
+    try:
+        with open(storage_path, 'w') as f:
+            json.dump(alerts, f, indent=2)
+            logger.debug(f"Saved {len(alerts)} alerts to {storage_path}")
+    except Exception as e:
+        logger.error(f"Error saving alerts to {storage_path}: {e}")
+        raise
+
+
+def add_alert(
+    market_id: str,
+    direction: Literal["above", "below"],
+    target_price: float,
+    alert_id: Optional[str] = None,
+    storage_path: str = ALERTS_STORAGE_PATH,
+) -> str:
+    """
+    Add a price alert to persistent storage.
+    
+    Args:
+        market_id: Unique identifier for the market
+        direction: Alert direction - "above" or "below"
+        target_price: Price threshold that triggers the alert (0-1)
+        alert_id: Optional custom alert ID. If not provided, generates one
+        storage_path: Path to JSON storage file
+        
+    Returns:
+        Alert ID (string) of the added alert
+        
+    Raises:
+        ValueError: If inputs are invalid or alert_id already exists
+    """
+    # Validate inputs using existing validation
+    _validate_market_id_format(market_id)
+    alert = create_price_alert(market_id, direction, target_price)
+    
+    # Generate alert ID if not provided
+    if alert_id is None:
+        import uuid
+        alert_id = str(uuid.uuid4())
+    
+    # Load existing alerts
+    alerts = _load_alerts(storage_path)
+    
+    # Check if alert_id already exists
+    if alert_id in alerts:
+        raise ValueError(f"Alert with ID '{alert_id}' already exists")
+    
+    # Store alert data
+    alert_data = {
+        "id": alert_id,
+        "market_id": market_id,
+        "direction": direction,
+        "target_price": target_price,
+        "created_at": datetime.now().isoformat(),
+    }
+    
+    alerts[alert_id] = alert_data
+    _save_alerts(alerts, storage_path)
+    
+    logger.info(
+        f"Added price alert {alert_id} for market {market_id}: "
+        f"{direction} {target_price:.4f}"
+    )
+    
+    return alert_id
+
+
+def remove_alert(
+    alert_id: str,
+    storage_path: str = ALERTS_STORAGE_PATH,
+) -> bool:
+    """
+    Remove a price alert from persistent storage.
+    
+    Args:
+        alert_id: ID of the alert to remove
+        storage_path: Path to JSON storage file
+        
+    Returns:
+        True if alert was removed, False if alert was not found
+    """
+    alerts = _load_alerts(storage_path)
+    
+    if alert_id not in alerts:
+        logger.warning(f"Alert {alert_id} not found for removal")
+        return False
+    
+    removed_alert = alerts.pop(alert_id)
+    _save_alerts(alerts, storage_path)
+    
+    logger.info(
+        f"Removed price alert {alert_id} for market "
+        f"{removed_alert['market_id']}"
+    )
+    
+    return True
+
+
+def list_alerts(
+    storage_path: str = ALERTS_STORAGE_PATH,
+) -> List[Dict[str, Any]]:
+    """
+    List all price alerts from persistent storage.
+    
+    Args:
+        storage_path: Path to JSON storage file
+        
+    Returns:
+        List of alert dictionaries, sorted by creation time (newest first)
+    """
+    alerts = _load_alerts(storage_path)
+    
+    # Convert to list and sort by created_at
+    alert_list = list(alerts.values())
+    alert_list.sort(
+        key=lambda x: x.get("created_at", ""),
+        reverse=True
+    )
+    
+    logger.debug(f"Listed {len(alert_list)} alerts")
+    
+    return alert_list
