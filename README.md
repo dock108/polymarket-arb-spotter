@@ -5,6 +5,8 @@ A Python tool for detecting arbitrage opportunities in Polymarket prediction mar
 ## 🚀 Features
 
 - **Real-time Detection**: Monitor Polymarket markets for arbitrage opportunities
+- **Price Alert Watcher**: Subscribe to markets and get alerted when prices cross thresholds
+- **WebSocket Streaming**: Real-time price updates via WebSocket connections
 - **Mock Data Simulation**: Test detection algorithms with generated data
 - **Interactive Dashboard**: Streamlit-based UI for visualization
 - **SQLite Storage**: Persistent storage of detected opportunities
@@ -101,6 +103,46 @@ Options:
 - `--num-markets N`: Total markets for batch mode (default: 1000)
 - `--log-level LEVEL`: Logging level (default: INFO)
 - `--seed N`: Random seed for reproducibility (default: 42)
+
+### Using Price Alert Watcher
+
+Monitor markets and get alerted when prices cross thresholds:
+
+```bash
+# Run the example script
+python scripts/example_price_alert_watcher_mock.py
+```
+
+The Price Alert Watcher provides:
+- **Real-time monitoring** via WebSocket subscriptions
+- **Threshold alerts** for "above" and "below" price targets
+- **Duplicate prevention** with configurable cooldown periods
+- **Callback system** for handling triggered alerts
+- **Persistent storage** of alert configurations
+
+Example usage in code:
+
+```python
+from app.core.api_client import PolymarketAPIClient
+from app.core.price_alerts import PriceAlertWatcher, add_alert
+
+# Add alerts
+add_alert("market_id_1", "above", 0.65)
+add_alert("market_id_2", "below", 0.35)
+
+# Create and start watcher
+api_client = PolymarketAPIClient()
+watcher = PriceAlertWatcher(
+    api_client=api_client,
+    alert_cooldown=300.0,  # 5 minutes
+    on_alert_triggered=lambda alert: print(f"Alert: {alert.alert_message}")
+)
+watcher.start()
+
+# Watcher runs in background, monitoring all markets with alerts
+# Stop when done
+watcher.stop()
+```
 
 ## 🧪 Testing
 
