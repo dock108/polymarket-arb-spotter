@@ -82,7 +82,8 @@ class TestThinDepthWithMockedOrderbook(unittest.TestCase):
         metrics = analyze_depth(orderbook)
         signals = detect_depth_signals(metrics, DEFAULT_TEST_CONFIG)
 
-        # Total depth = 25 + 25 = 50 (< 500 threshold)
+        # total_yes_depth = 25 + 25 = 50, total_no_depth = 50 (binary market)
+        # Total depth for threshold check = 50 + 50 = 100 (< 500 threshold)
         self.assertEqual(metrics["total_yes_depth"], 50.0)
         thin_signals = [s for s in signals if s.signal_type == "thin_depth"]
         self.assertEqual(len(thin_signals), 1)
@@ -99,7 +100,8 @@ class TestThinDepthWithMockedOrderbook(unittest.TestCase):
         metrics = analyze_depth(orderbook)
         signals = detect_depth_signals(metrics, DEFAULT_TEST_CONFIG)
 
-        # Total depth = 40+30+20+50+40+30 = 210 (< 500 threshold)
+        # total_yes_depth = 40+30+20+50+40+30 = 210, total_no_depth = 210
+        # Total depth for threshold check = 210 + 210 = 420 (< 500 threshold)
         self.assertEqual(metrics["total_yes_depth"], 210.0)
         thin_signals = [s for s in signals if s.signal_type == "thin_depth"]
         self.assertEqual(len(thin_signals), 1)
@@ -135,7 +137,8 @@ class TestThinDepthWithMockedOrderbook(unittest.TestCase):
         metrics = analyze_depth(orderbook)
         signals = detect_depth_signals(metrics, DEFAULT_TEST_CONFIG)
 
-        # Total depth = 124 + 125 = 249 -> total for check = 249*2 = 498 (< 500)
+        # total_yes_depth = 124 + 125 = 249, total_no_depth = 249
+        # Total depth for threshold check = 249 + 249 = 498 (< 500 threshold)
         self.assertEqual(metrics["total_yes_depth"], 249.0)
         thin_signals = [s for s in signals if s.signal_type == "thin_depth"]
         self.assertEqual(len(thin_signals), 1)
@@ -486,7 +489,7 @@ class TestMultipleSignalsWithMockedOrderbook(unittest.TestCase):
         self.assertIn("large_gap", signal_types)
 
     def test_thin_depth_and_imbalance(self):
-        """Test both thin depth and imbalance signals triggered together."""
+        """Test thin depth signal with moderate imbalance (below threshold)."""
         yes_bids, yes_asks, no_bids, no_asks = create_mock_normalized_orderbook(
             yes_bids=[(0.45, 100.0)],
             yes_asks=[(0.55, 100.0)],
@@ -499,15 +502,14 @@ class TestMultipleSignalsWithMockedOrderbook(unittest.TestCase):
 
         # YES depth = 200, NO depth = 20, Total = 220 (< 500)
         # Imbalance = 200 - 20 = 180 (< 300 threshold, so no imbalance signal)
-        # Actually, let's increase imbalance
         self.assertEqual(metrics["total_yes_depth"], 200.0)
         self.assertEqual(metrics["total_no_depth"], 20.0)
-        # Total = 220 < 500, so thin_depth triggers
+        # Only thin_depth triggers (imbalance below threshold)
         thin_signals = [s for s in signals if s.signal_type == "thin_depth"]
         self.assertEqual(len(thin_signals), 1)
 
-    def test_thin_depth_gap_and_imbalance_all_three(self):
-        """Test all three signals triggered simultaneously."""
+    def test_thin_depth_and_large_gap_together(self):
+        """Test thin depth and large gap signals (imbalance below threshold)."""
         yes_bids, yes_asks, no_bids, no_asks = create_mock_normalized_orderbook(
             yes_bids=[(0.20, 50.0)],
             yes_asks=[(0.60, 50.0)],
@@ -527,8 +529,9 @@ class TestMultipleSignalsWithMockedOrderbook(unittest.TestCase):
         # NO gap = 0.80 - 0.40 = 0.40 (> 0.10)
         self.assertAlmostEqual(metrics["top_gap_no"], 0.40, places=6)
 
-        # Imbalance = 100 - 10 = 90 (< 300, so no imbalance signal)
-        # To trigger all three, need higher imbalance
+        # Imbalance = 100 - 10 = 90 (< 300, no imbalance signal)
+        # Should trigger thin_depth and large_gap only
+        self.assertEqual(len(signals), 2)
         signal_types = {s.signal_type for s in signals}
         self.assertIn("thin_depth", signal_types)
         self.assertIn("large_gap", signal_types)
@@ -664,7 +667,8 @@ class TestEdgeCasesWithMockedOrderbook(unittest.TestCase):
         metrics = analyze_depth(orderbook)
         signals = detect_depth_signals(metrics, DEFAULT_TEST_CONFIG)
 
-        # Total depth = 900 * 2 = 1800 (> 500, no thin_depth)
+        # total_yes_depth = 500 + 400 = 900, total_no_depth = 900 (binary market)
+        # Total depth for threshold = 900 + 900 = 1800 (> 500, no thin_depth)
         self.assertEqual(metrics["total_yes_depth"], 900.0)
         # Gap = 0 (no asks)
         self.assertEqual(metrics["top_gap_yes"], 0.0)
@@ -682,6 +686,7 @@ class TestEdgeCasesWithMockedOrderbook(unittest.TestCase):
         metrics = analyze_depth(orderbook)
         signals = detect_depth_signals(metrics, DEFAULT_TEST_CONFIG)
 
+        # total_yes_depth = 500 + 400 = 900, total_no_depth = 900 (binary market)
         self.assertEqual(metrics["total_yes_depth"], 900.0)
         self.assertEqual(metrics["top_gap_yes"], 0.0)
 
@@ -698,7 +703,8 @@ class TestEdgeCasesWithMockedOrderbook(unittest.TestCase):
         metrics = analyze_depth(orderbook)
         signals = detect_depth_signals(metrics, DEFAULT_TEST_CONFIG)
 
-        # Total depth = 200 * 2 = 400 (< 500) -> thin_depth
+        # total_yes_depth = 100 + 100 = 200, total_no_depth = 200 (binary market)
+        # Total depth for threshold = 200 + 200 = 400 (< 500) -> thin_depth
         self.assertEqual(metrics["total_yes_depth"], 200.0)
         thin_signals = [s for s in signals if s.signal_type == "thin_depth"]
         self.assertEqual(len(thin_signals), 1)
@@ -736,7 +742,8 @@ class TestEdgeCasesWithMockedOrderbook(unittest.TestCase):
 
         # Gap = 0.5001 - 0.4999 = 0.0002 (very tight)
         self.assertAlmostEqual(metrics["top_gap_yes"], 0.0002, places=6)
-        # Total depth = 1800 * 2 = 3600 (> 500)
+        # total_yes_depth = 500 + 400 + 500 + 400 = 1800, total_no_depth = 1800
+        # Total depth for threshold = 1800 + 1800 = 3600 (> 500)
         self.assertEqual(metrics["total_yes_depth"], 1800.0)
 
         # No signals should be triggered
