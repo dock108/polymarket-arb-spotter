@@ -1,9 +1,8 @@
 """
 History view for viewing past arbitrage opportunities.
 
-Displays recent arbitrage opportunities from the database with basic
-filtering and export functionality. Additional analytics features
-are planned for future releases.
+Displays recent arbitrage events from the database with filtering
+and export functionality.
 """
 
 from datetime import datetime
@@ -12,38 +11,48 @@ from typing import Any, Dict
 import pandas as pd
 import streamlit as st
 
-from app.core.arb_detector import ArbitrageDetector
-from app.core.logger import logger
+from app.core.logger import fetch_recent, logger
 
 
 def render_history_view():
     """
-    Render the history view page.
+    Render the history view page with filters.
 
-    Shows detected arbitrage opportunities with basic filtering.
-    Advanced features like time-series charts and detailed analytics
-    are planned for future releases.
+    Shows logged arbitrage events with decision filter and profit filter.
+    Includes failure reasons chart for debugging detection issues.
     """
     st.title("📜 Opportunity History")
     st.markdown("---")
 
-    # Filters (displayed but not currently functional - placeholder for future)
+    # Filters
     col1, col2, col3 = st.columns(3)
 
     with col1:
         _ = st.selectbox(
-            "Time Range", ["Last 24 Hours", "Last 7 Days", "Last 30 Days", "All Time"]
+            "Time Range", ["All Time", "Last 24 Hours", "Last 7 Days", "Last 30 Days"]
         )
 
     with col2:
-        _ = st.selectbox(
-            "Opportunity Type", ["All Types", "Two-Way", "Triangular", "Cross-Market"]
-        )
+        decision_filter = st.selectbox("Decision", ["All", "Alerted", "Ignored"])
 
     with col3:
-        _ = st.number_input("Min Profit ($)", min_value=0.0, value=0.0, step=1.0)
+        min_profit = st.number_input("Min Profit %", min_value=0.0, value=0.0, step=0.1)
 
     st.markdown("---")
+
+    # Fetch history
+    events = fetch_recent(limit=1000)
+
+    # Apply filters
+    if decision_filter != "All":
+        events = [
+            e
+            for e in events
+            if e.get("decision", "").lower() == decision_filter.lower()
+        ]
+
+    if min_profit > 0:
+        events = [e for e in events if e.get("expected_profit_pct", 0) >= min_profit]
 
     # Statistics
     st.subheader("Summary Statistics")
@@ -51,59 +60,88 @@ def render_history_view():
     stat_col1, stat_col2, stat_col3, stat_col4 = st.columns(4)
 
     with stat_col1:
-        st.metric("Total Opportunities", "0")
+        st.metric("Total Events", len(events))
 
     with stat_col2:
-        st.metric("Total Expected Profit", "$0.00")
+        alerted = sum(1 for e in events if e.get("decision") == "alerted")
+        st.metric("Alerted", alerted)
 
     with stat_col3:
-        st.metric("Average Return", "0.00%")
+        if events:
+            avg_profit = sum(e.get("expected_profit_pct", 0) for e in events) / len(
+                events
+            )
+            st.metric("Avg Profit %", f"{avg_profit:.2f}%")
+        else:
+            st.metric("Avg Profit %", "0.00%")
 
     with stat_col4:
-        st.metric("Success Rate", "N/A")
+        failures = sum(1 for e in events if e.get("failure_reason"))
+        st.metric("Failures", failures)
 
     st.markdown("---")
 
     # History table
-    st.subheader("Opportunity History")
+    st.subheader("Event History")
 
-    try:
-        detector = ArbitrageDetector()
-        opportunities = detector.get_recent_opportunities(limit=100)
+    if events:
+        df = pd.DataFrame(events)
 
-        if opportunities:
-            df = pd.DataFrame(opportunities)
-            st.dataframe(df, use_container_width=True)
+        # Select relevant columns
+        display_cols = [
+            "timestamp",
+            "market_name",
+            "expected_profit_pct",
+            "decision",
+            "mode",
+            "failure_reason",
+        ]
+        df_display = df[[col for col in display_cols if col in df.columns]].copy()
 
-            # Export option
-            if st.button("📥 Export to CSV"):
-                csv = df.to_csv(index=False)
-                st.download_button(
-                    label="Download CSV",
-                    data=csv,
-                    file_name=f"opportunities_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
-                    mime="text/csv",
-                )
-        else:
-            st.info("No historical opportunities found.")
+        # Rename columns
+        column_names = {
+            "timestamp": "Time",
+            "market_name": "Market",
+            "expected_profit_pct": "Profit %",
+            "decision": "Decision",
+            "mode": "Mode",
+            "failure_reason": "Failure Reason",
+        }
+        df_display.columns = [column_names.get(col, col) for col in df_display.columns]
 
-    except Exception as e:
-        st.error(f"Error loading history: {e}")
-        logger.error(f"Error in history view: {e}")
+        st.dataframe(df_display, use_container_width=True)
 
-    # Charts
+        # Export option
+        if st.button("📥 Export to CSV"):
+            csv = df_display.to_csv(index=False)
+            st.download_button(
+                label="Download CSV",
+                data=csv,
+                file_name=f"opportunities_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                mime="text/csv",
+            )
+    else:
+        st.info("No historical events found.")
+
     st.markdown("---")
-    st.subheader("Analytics")
 
-    chart_col1, chart_col2 = st.columns(2)
+    # Failure reasons chart
+    st.subheader("📉 Failure Reasons")
 
-    with chart_col1:
-        st.markdown("**Opportunities Over Time**")
-        st.info("📊 Time series chart - planned for future release")
+    failures_with_reasons = [e for e in events if e.get("failure_reason")]
 
-    with chart_col2:
-        st.markdown("**Profit Distribution**")
-        st.info("📊 Profit distribution chart - planned for future release")
+    if failures_with_reasons:
+        failure_counts: Dict[str, int] = {}
+        for event in failures_with_reasons:
+            reason = event.get("failure_reason", "Unknown")
+            failure_counts[reason] = failure_counts.get(reason, 0) + 1
+
+        failure_df = pd.DataFrame(
+            list(failure_counts.items()), columns=["Reason", "Count"]
+        )
+        st.bar_chart(failure_df.set_index("Reason"))
+    else:
+        st.info("No failures recorded.")
 
 
 def show_opportunity_detail_modal(opportunity: Dict[str, Any]):
@@ -120,5 +158,4 @@ def show_opportunity_detail_modal(opportunity: Dict[str, Any]):
 
 
 if __name__ == "__main__":
-    # For testing the history view standalone
     render_history_view()

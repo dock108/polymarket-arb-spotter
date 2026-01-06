@@ -1,6 +1,6 @@
 # 🎯 Polymarket Arbitrage Spotter
 
-A Python tool for detecting arbitrage opportunities in Polymarket prediction markets. This tool focuses on detection only - no trading is performed.
+A Python tool for detecting arbitrage opportunities in Polymarket prediction markets. **Detection only - no trading is performed.**
 
 ## 🚀 Features
 
@@ -10,7 +10,6 @@ A Python tool for detecting arbitrage opportunities in Polymarket prediction mar
 - **Mock Data Simulation**: Test detection algorithms with generated data
 - **Interactive Dashboard**: Streamlit-based UI for visualization
 - **SQLite Storage**: Persistent storage of detected opportunities
-- **Performance Testing**: Speed benchmarking tools
 - **Notification Support**: Telegram and email alerts
 
 ## 📁 Project Structure
@@ -21,211 +20,106 @@ polymarket-arb-spotter/
 │   ├── core/            # Core detection logic
 │   └── ui/              # Streamlit UI components
 ├── tests/               # Unit tests
-├── scripts/             # Example scripts
+├── scripts/             # Example and production scripts
 ├── docs/                # Documentation
 ├── data/                # Data storage (gitignored)
 ├── run_live.py          # Streamlit dashboard entry point
 └── run_mock_speed.py    # Speed test script
 ```
 
-## 🔧 Installation
+## 🔧 Quick Start
 
 ### Prerequisites
 
-- Python 3.8 or higher
-- pip package manager
+- Python 3.8+
+- pip
 
-### Setup
+### Installation
 
-1. Clone the repository:
 ```bash
+# Clone the repository
 git clone https://github.com/dock108/polymarket-arb-spotter.git
 cd polymarket-arb-spotter
-```
 
-2. Create a virtual environment (recommended):
-```bash
+# Create virtual environment (recommended)
 python -m venv venv
 source venv/bin/activate  # On Windows: venv\Scripts\activate
-```
 
-3. Install dependencies:
-```bash
+# Install dependencies
 pip install -r requirements.txt
-```
 
-4. Configure environment variables (optional):
-```bash
-# Copy the example environment file
+# Configure (optional)
 cp .env.example .env
-
-# Edit .env with your preferred settings
-nano .env  # or use your favorite editor
 ```
-
-See the [Configuration](#️-configuration) section below for details on all available environment variables.
 
 ## 🎮 Usage
 
-### Running the Live Dashboard
-
-Start the Streamlit dashboard for real-time monitoring:
+### Interactive Dashboard
 
 ```bash
 streamlit run run_live.py
 ```
 
-This will open a web browser with the interactive dashboard where you can:
-- Monitor detected arbitrage opportunities
-- View historical data
-- Configure detection parameters
-- Track system status
+Opens a web dashboard for real-time monitoring, historical data, and system status.
 
-### Running Speed Tests
-
-Test the detection performance with mock data:
+### Speed Tests
 
 ```bash
-# Run a 60-second speed test
-python run_mock_speed.py
-
-# Run with custom duration
-python run_mock_speed.py --duration 120
-
-# Run batch mode with specific number of markets
-python run_mock_speed.py --mode batch --num-markets 10000 --batch-size 100
+python run_mock_speed.py                    # Default 60-second test
+python run_mock_speed.py --duration 120     # Custom duration
 ```
 
-Options:
-- `--duration SECONDS`: Duration for speed test mode (default: 60)
-- `--mode {speed|batch}`: Test mode (default: speed)
-- `--batch-size N`: Markets per batch (default: 10)
-- `--num-markets N`: Total markets for batch mode (default: 1000)
-- `--log-level LEVEL`: Logging level (default: INFO)
-- `--seed N`: Random seed for reproducibility (default: 42)
-
-### Using Price Alert Watcher
-
-Monitor markets and get alerted when prices cross thresholds:
+### Price Alert Watcher
 
 ```bash
-# Run the example script
-python scripts/example_price_alert_watcher_mock.py
+python scripts/run_price_alerts.py
 ```
 
-The Price Alert Watcher provides:
-- **Real-time monitoring** via WebSocket subscriptions
-- **Threshold alerts** for "above" and "below" price targets
-- **Duplicate prevention** with configurable cooldown periods
-- **Callback system** for handling triggered alerts
-- **Persistent storage** of alert configurations
-
-Example usage in code:
-
-```python
-from app.core.api_client import PolymarketAPIClient
-from app.core.price_alerts import PriceAlertWatcher, add_alert
-
-# Add alerts
-add_alert("market_id_1", "above", 0.65)
-add_alert("market_id_2", "below", 0.35)
-
-# Create and start watcher
-api_client = PolymarketAPIClient()
-watcher = PriceAlertWatcher(
-    api_client=api_client,
-    alert_cooldown=300.0,  # 5 minutes
-    on_alert_triggered=lambda alert: print(f"Alert: {alert.alert_message}")
-)
-watcher.start()
-
-# Watcher runs in background, monitoring all markets with alerts
-# Stop when done
-watcher.stop()
-```
+See [docs/price_alerts_usage.md](docs/price_alerts_usage.md) for detailed usage.
 
 ## 🧪 Testing
 
-Run the test suite:
-
 ```bash
-# Run all tests
-pytest
-
-# Run with coverage
-pytest --cov=app --cov-report=html
-
-# Run specific test file
-pytest tests/test_arb_detector.py
+pytest                              # Run all tests
+pytest --cov=app --cov-report=html  # With coverage
 ```
 
 ## ⚙️ Configuration
 
-The application uses environment variables for configuration. Create a `.env` file:
+Copy `.env.example` to `.env` and configure:
 
-```bash
-cp .env.example .env
-nano .env  # Edit with your settings
-```
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `MIN_PROFIT_PERCENT` | Minimum profit threshold | 1.0 |
+| `FEE_BUFFER_PERCENT` | Fee buffer for transaction fees | 0.5 |
+| `MAX_STAKE` | Maximum stake per opportunity (USD) | 1000.0 |
+| `ALERT_METHOD` | `telegram` or `email` (empty to disable) | - |
+| `LOG_LEVEL` | Logging level | INFO |
 
-### Key Configuration Options
-
-**Detection Parameters:**
-- `MIN_PROFIT_PERCENT` - Minimum profit threshold (default: 1.0)
-- `FEE_BUFFER_PERCENT` - Fee buffer for transaction fees (default: 0.5)
-- `MAX_STAKE` - Maximum stake per opportunity in USD (default: 1000.0)
-
-**Alerts:**
-- `ALERT_METHOD` - `"telegram"` or `"email"` (leave empty to disable)
-- `TELEGRAM_API_KEY` - Telegram bot token
-- `TELEGRAM_CHAT_ID` - Telegram chat ID
-- `EMAIL_SMTP_SERVER` - SMTP server for email alerts
-
-**Database & Logging:**
-- `LOG_DB_PATH` - Path to logs database (default: `data/arb_logs.sqlite`)
-- `LOG_LEVEL` - Logging level (default: INFO)
-
-See [docs/notifications.md](docs/notifications.md) for detailed notification setup.
+See `.env.example` for all available options.
 
 ## 📚 Documentation
 
-- [Notification Setup](docs/notifications.md) - Configure Telegram/email alerts
-- [Deployment Guide](docs/deployment.md) - Deploy on Raspberry Pi or servers
-- [Scripts Documentation](docs/scripts.md) - Example scripts and utilities
+| Document | Description |
+|----------|-------------|
+| [Notification Setup](docs/notifications.md) | Configure Telegram/email alerts |
+| [Deployment Guide](docs/deployment.md) | Deploy on Raspberry Pi or servers |
+| [Scripts Documentation](docs/scripts.md) | Example scripts and utilities |
+| [Price Alerts](docs/price_alerts_usage.md) | Price alert watcher usage |
 
-## 🔒 Security Notes
+## 🔒 Security
 
 - Store API keys in `.env` file (gitignored)
 - Never commit sensitive data
-- This tool is detection-only - no trading credentials needed
+- Detection-only tool - no trading credentials needed
 
 ## 📝 Development
 
-### Code Style
-
-The project uses:
-- **Black** for code formatting
-- **Flake8** for linting
-- **MyPy** for type checking
-
 ```bash
-# Format code
-black app/ tests/
-
-# Lint code
-flake8 app/ tests/
-
-# Type check
-mypy app/
+black app/ tests/    # Format code
+flake8 app/ tests/   # Lint code
+mypy app/            # Type check
 ```
-
-## 📄 License
-
-TODO: Add license information
-
-## 🤝 Contributing
-
-Contributions are welcome! Please submit a Pull Request.
 
 ## ⚠️ Disclaimer
 
