@@ -9,7 +9,6 @@ sending notifications. Includes persistent JSON storage for alerts.
 import json
 import os
 import threading
-import time
 import uuid
 from dataclasses import dataclass
 from datetime import datetime, timedelta

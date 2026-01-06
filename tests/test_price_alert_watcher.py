@@ -459,6 +459,8 @@ class TestPriceAlertWatcherIntegration(unittest.TestCase):
             orderbook1 = NormalizedOrderBook(
                 yes_best_bid=0.69,
                 yes_best_ask=0.71,
+                no_best_bid=0.29,
+                no_best_ask=0.31,
                 market_id="market_123",
                 timestamp=datetime.now(),
             )
@@ -467,6 +469,8 @@ class TestPriceAlertWatcherIntegration(unittest.TestCase):
             orderbook2 = NormalizedOrderBook(
                 yes_best_bid=0.34,
                 yes_best_ask=0.36,
+                no_best_bid=0.64,
+                no_best_ask=0.66,
                 market_id="market_456",
                 timestamp=datetime.now(),
             )
