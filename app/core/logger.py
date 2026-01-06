@@ -114,6 +114,22 @@ def init_db(db_path: str = _DB_PATH) -> None:
             pk="id",
         )
 
+    # Create price_alert_events table with schema if it doesn't exist
+    if "price_alert_events" not in db.table_names():
+        db["price_alert_events"].create(
+            {
+                "timestamp": str,
+                "alert_id": str,
+                "market_id": str,
+                "direction": str,
+                "target_price": float,
+                "trigger_price": float,
+                "mode": str,
+                "latency_ms": int,
+            },
+            pk="id",
+        )
+
 
 def log_event(data: Dict[str, Any], db_path: str = _DB_PATH) -> None:
     """
@@ -150,6 +166,31 @@ def log_event(data: Dict[str, Any], db_path: str = _DB_PATH) -> None:
         # Don't re-raise to allow continued processing
 
 
+def _get_table_columns(db: Database, table_name: str) -> List[str]:
+    """
+    Get column names for a table.
+
+    Args:
+        db: Database instance
+        table_name: Name of the table (must be 'arbitrage_events' or 'price_alert_events')
+
+    Returns:
+        List of column names
+
+    Raises:
+        ValueError: If table_name is not in the allowed list
+    """
+    # Whitelist of allowed table names to prevent SQL injection
+    allowed_tables = {"arbitrage_events", "price_alert_events"}
+    if table_name not in allowed_tables:
+        raise ValueError(f"Invalid table name: {table_name}")
+
+    columns = [
+        col[0] for col in db.execute(f"SELECT * FROM {table_name} LIMIT 0").description
+    ]
+    return columns
+
+
 def fetch_recent(limit: int = 100, db_path: str = _DB_PATH) -> List[Dict[str, Any]]:
     """
     Fetch the most recent arbitrage events from the database.
@@ -179,15 +220,84 @@ def fetch_recent(limit: int = 100, db_path: str = _DB_PATH) -> List[Dict[str, An
             return []
 
         # Get column names
-        columns = [
-            col[0]
-            for col in db.execute("SELECT * FROM arbitrage_events LIMIT 0").description
-        ]
+        columns = _get_table_columns(db, "arbitrage_events")
 
         return [dict(zip(columns, row)) for row in rows]
 
     except Exception as e:
         logger.error(f"Error fetching recent events: {e}", exc_info=True)
+        return []
+
+
+def log_price_alert_event(data: Dict[str, Any], db_path: str = _DB_PATH) -> None:
+    """
+    Log a price alert event to the database.
+
+    Args:
+        data: Dictionary containing the price alert event data with keys:
+            - timestamp (datetime or str): When the alert was triggered
+            - alert_id (str): Unique identifier of the alert
+            - market_id (str): Unique identifier of the market
+            - direction (str): Direction of the alert ("above" or "below")
+            - target_price (float): Target price that triggered the alert
+            - trigger_price (float): Actual price when alert was triggered
+            - mode (str): Mode of operation ("mock" or "live")
+            - latency_ms (int): Latency in milliseconds
+        db_path: Path to the SQLite database file
+    """
+    try:
+        db = Database(db_path)
+
+        # Convert timestamp to string if it's a datetime object
+        event_data = data.copy()
+        if hasattr(event_data.get("timestamp"), "isoformat"):
+            event_data["timestamp"] = event_data["timestamp"].isoformat()
+
+        db["price_alert_events"].insert(event_data)
+
+    except Exception as e:
+        logger.error(f"Error logging price alert event to database: {e}", exc_info=True)
+        # Don't re-raise to allow continued processing
+
+
+def fetch_recent_price_alerts(
+    limit: int = 100, db_path: str = _DB_PATH
+) -> List[Dict[str, Any]]:
+    """
+    Fetch the most recent price alert events from the database.
+
+    Args:
+        limit: Maximum number of entries to retrieve (default: 100)
+        db_path: Path to the SQLite database file
+
+    Returns:
+        List of dictionaries containing the price alert event data,
+        ordered by timestamp in descending order (most recent first)
+    """
+    try:
+        db = Database(db_path)
+
+        # Check if table exists
+        if "price_alert_events" not in db.table_names():
+            return []
+
+        # Fetch recent entries ordered by timestamp descending using SQL
+        rows = db.execute(
+            "SELECT * FROM price_alert_events ORDER BY timestamp DESC LIMIT ?",
+            [limit],
+        ).fetchall()
+
+        # Convert to list of dictionaries
+        if not rows:
+            return []
+
+        # Get column names
+        columns = _get_table_columns(db, "price_alert_events")
+
+        return [dict(zip(columns, row)) for row in rows]
+
+    except Exception as e:
+        logger.error(f"Error fetching recent price alert events: {e}", exc_info=True)
         return []
 
 
