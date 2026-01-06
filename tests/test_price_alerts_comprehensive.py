@@ -17,7 +17,7 @@ import tempfile
 import time
 import unittest
 from datetime import datetime, timedelta
-from unittest.mock import MagicMock, patch, call
+from unittest.mock import MagicMock, patch
 
 from app.core.api_client import NormalizedOrderBook
 from app.core.price_alerts import (
@@ -30,14 +30,13 @@ from app.core.price_alerts import (
     remove_alert,
     list_alerts,
     _load_alerts,
-    _save_alerts,
 )
 
 
 class TestThresholdDetection(unittest.TestCase):
     """
     Test Suite 1: Threshold Detection
-    
+
     Validates that price alerts correctly detect when market prices
     cross configured thresholds (above/below) using mock market data.
     """
@@ -53,7 +52,7 @@ class TestThresholdDetection(unittest.TestCase):
                 {"name": "No", "price": 0.28},
             ],
         }
-        
+
         # Watch market with 'above' threshold at 0.65
         alert = watch_market_price(
             market_id="mock_market_001",
@@ -61,7 +60,7 @@ class TestThresholdDetection(unittest.TestCase):
             target_price=0.65,
             market_data=mock_market_data,
         )
-        
+
         # Verify threshold was crossed and alert triggered
         self.assertTrue(alert.triggered)
         self.assertEqual(alert.current_price, 0.72)
@@ -80,7 +79,7 @@ class TestThresholdDetection(unittest.TestCase):
                 {"name": "No", "price": 0.42},
             ],
         }
-        
+
         # Watch market with 'above' threshold at 0.65
         alert = watch_market_price(
             market_id="mock_market_002",
@@ -88,7 +87,7 @@ class TestThresholdDetection(unittest.TestCase):
             target_price=0.65,
             market_data=mock_market_data,
         )
-        
+
         # Verify threshold was NOT crossed
         self.assertFalse(alert.triggered)
         self.assertEqual(alert.current_price, 0.58)
@@ -106,7 +105,7 @@ class TestThresholdDetection(unittest.TestCase):
                 {"name": "No", "price": 0.78},
             ],
         }
-        
+
         # Watch market with 'below' threshold at 0.30
         alert = watch_market_price(
             market_id="mock_market_003",
@@ -114,7 +113,7 @@ class TestThresholdDetection(unittest.TestCase):
             target_price=0.30,
             market_data=mock_market_data,
         )
-        
+
         # Verify threshold was crossed and alert triggered
         self.assertTrue(alert.triggered)
         self.assertEqual(alert.current_price, 0.22)
@@ -133,7 +132,7 @@ class TestThresholdDetection(unittest.TestCase):
                 {"name": "No", "price": 0.55},
             ],
         }
-        
+
         # Watch market with 'below' threshold at 0.30
         alert = watch_market_price(
             market_id="mock_market_004",
@@ -141,7 +140,7 @@ class TestThresholdDetection(unittest.TestCase):
             target_price=0.30,
             market_data=mock_market_data,
         )
-        
+
         # Verify threshold was NOT crossed
         self.assertFalse(alert.triggered)
         self.assertEqual(alert.current_price, 0.45)
@@ -155,18 +154,18 @@ class TestThresholdDetection(unittest.TestCase):
             "id": "mock_market_005",
             "outcomes": [{"name": "Yes", "price": 0.50}],
         }
-        
+
         alert_above = watch_market_price(
             "mock_market_005", "above", 0.50, mock_data_exact
         )
         self.assertFalse(alert_above.triggered)
-        
+
         # Test 'below' with price exactly at threshold (should NOT trigger)
         alert_below = watch_market_price(
             "mock_market_005", "below", 0.50, mock_data_exact
         )
         self.assertFalse(alert_below.triggered)
-        
+
         # Test 'above' with price just above threshold (should trigger)
         mock_data_above = {
             "id": "mock_market_006",
@@ -176,7 +175,7 @@ class TestThresholdDetection(unittest.TestCase):
             "mock_market_006", "above", 0.50, mock_data_above
         )
         self.assertTrue(alert_above_triggered.triggered)
-        
+
         # Test 'below' with price just below threshold (should trigger)
         mock_data_below = {
             "id": "mock_market_007",
@@ -199,7 +198,7 @@ class TestThresholdDetection(unittest.TestCase):
                 {"name": "Outcome C", "price": 0.10},
             ],
         }
-        
+
         # Alert should use first outcome's price (0.75)
         alert = watch_market_price(
             market_id="mock_market_008",
@@ -207,7 +206,7 @@ class TestThresholdDetection(unittest.TestCase):
             target_price=0.70,
             market_data=mock_market_data,
         )
-        
+
         self.assertTrue(alert.triggered)
         self.assertEqual(alert.current_price, 0.75)
 
@@ -215,7 +214,7 @@ class TestThresholdDetection(unittest.TestCase):
 class TestDedupeBehavior(unittest.TestCase):
     """
     Test Suite 2: Dedupe Behavior
-    
+
     Validates that the price alert watcher prevents duplicate alerts
     using cooldown periods, even when prices continuously exceed thresholds.
     """
@@ -224,7 +223,7 @@ class TestDedupeBehavior(unittest.TestCase):
         """Set up test fixtures."""
         self.temp_dir = tempfile.mkdtemp()
         self.storage_path = os.path.join(self.temp_dir, "data", "test_alerts.json")
-        
+
         # Create mock API client (no network calls)
         self.mock_api_client = MagicMock()
         self.mock_api_client.stop_websocket = MagicMock()
@@ -243,18 +242,18 @@ class TestDedupeBehavior(unittest.TestCase):
             alert_id="test_dedupe_001",
             storage_path=self.storage_path,
         )
-        
+
         # Create watcher with 1-second cooldown
         watcher = PriceAlertWatcher(
             api_client=self.mock_api_client,
             storage_path=self.storage_path,
             alert_cooldown=1.0,
         )
-        
+
         # Track fired alerts
         fired_alerts = []
         watcher.on_alert_triggered = lambda alert: fired_alerts.append(alert)
-        
+
         # Mock orderbook that triggers alert (price 0.71 > threshold 0.60)
         mock_orderbook = NormalizedOrderBook(
             yes_best_bid=0.69,
@@ -264,16 +263,16 @@ class TestDedupeBehavior(unittest.TestCase):
             market_id="mock_market_100",
             timestamp=datetime.now(),
         )
-        
+
         # Simulate first price update - should trigger
         watcher._running = True
         watcher._handle_price_update("mock_market_100", mock_orderbook)
         self.assertEqual(len(fired_alerts), 1, "First alert should fire")
-        
+
         # Simulate second price update immediately - should NOT trigger (dedupe)
         watcher._handle_price_update("mock_market_100", mock_orderbook)
         self.assertEqual(len(fired_alerts), 1, "Second alert should be deduped")
-        
+
         # Simulate third price update immediately - should still NOT trigger
         watcher._handle_price_update("mock_market_100", mock_orderbook)
         self.assertEqual(len(fired_alerts), 1, "Third alert should be deduped")
@@ -288,18 +287,18 @@ class TestDedupeBehavior(unittest.TestCase):
             alert_id="test_dedupe_002",
             storage_path=self.storage_path,
         )
-        
+
         # Create watcher with 0.5-second cooldown (short for testing)
         watcher = PriceAlertWatcher(
             api_client=self.mock_api_client,
             storage_path=self.storage_path,
             alert_cooldown=0.5,
         )
-        
+
         # Track fired alerts
         fired_alerts = []
         watcher.on_alert_triggered = lambda alert: fired_alerts.append(alert)
-        
+
         # Mock orderbook that triggers alert
         mock_orderbook = NormalizedOrderBook(
             yes_best_bid=0.69,
@@ -309,19 +308,19 @@ class TestDedupeBehavior(unittest.TestCase):
             market_id="mock_market_101",
             timestamp=datetime.now(),
         )
-        
+
         # First alert - should fire
         watcher._running = True
         watcher._handle_price_update("mock_market_101", mock_orderbook)
         self.assertEqual(len(fired_alerts), 1, "First alert should fire")
-        
+
         # Immediate second update - should NOT fire (within cooldown)
         watcher._handle_price_update("mock_market_101", mock_orderbook)
         self.assertEqual(len(fired_alerts), 1, "Alert should be deduped")
-        
+
         # Wait for cooldown to expire
         time.sleep(0.6)
-        
+
         # Third update after cooldown - should fire again
         watcher._handle_price_update("mock_market_101", mock_orderbook)
         self.assertEqual(len(fired_alerts), 2, "Alert should fire after cooldown")
@@ -343,43 +342,49 @@ class TestDedupeBehavior(unittest.TestCase):
             alert_id="test_dedupe_003b",
             storage_path=self.storage_path,
         )
-        
+
         # Create watcher with 1-second cooldown
         watcher = PriceAlertWatcher(
             api_client=self.mock_api_client,
             storage_path=self.storage_path,
             alert_cooldown=1.0,
         )
-        
+
         fired_alerts = []
         watcher.on_alert_triggered = lambda alert: fired_alerts.append(alert)
-        
+
         # Mock orderbooks for both markets
         orderbook1 = NormalizedOrderBook(
-            yes_best_bid=0.69, yes_best_ask=0.71,
-            no_best_bid=0.29, no_best_ask=0.31,
-            market_id="mock_market_102", timestamp=datetime.now(),
+            yes_best_bid=0.69,
+            yes_best_ask=0.71,
+            no_best_bid=0.29,
+            no_best_ask=0.31,
+            market_id="mock_market_102",
+            timestamp=datetime.now(),
         )
         orderbook2 = NormalizedOrderBook(
-            yes_best_bid=0.34, yes_best_ask=0.36,
-            no_best_bid=0.64, no_best_ask=0.66,
-            market_id="mock_market_103", timestamp=datetime.now(),
+            yes_best_bid=0.34,
+            yes_best_ask=0.36,
+            no_best_bid=0.64,
+            no_best_ask=0.66,
+            market_id="mock_market_103",
+            timestamp=datetime.now(),
         )
-        
+
         watcher._running = True
-        
+
         # Fire first alert
         watcher._handle_price_update("mock_market_102", orderbook1)
         self.assertEqual(len(fired_alerts), 1)
-        
+
         # Fire second alert (different market, should not be affected by first cooldown)
         watcher._handle_price_update("mock_market_103", orderbook2)
         self.assertEqual(len(fired_alerts), 2)
-        
+
         # Try to fire first alert again (should be blocked by cooldown)
         watcher._handle_price_update("mock_market_102", orderbook1)
         self.assertEqual(len(fired_alerts), 2)
-        
+
         # Try to fire second alert again (should also be blocked by its cooldown)
         watcher._handle_price_update("mock_market_103", orderbook2)
         self.assertEqual(len(fired_alerts), 2)
@@ -391,21 +396,21 @@ class TestDedupeBehavior(unittest.TestCase):
             storage_path=self.storage_path,
             alert_cooldown=1.0,
         )
-        
+
         alert_id = "test_alert_id"
-        
+
         # First time - should fire (no previous trigger)
         self.assertTrue(watcher._should_fire_alert(alert_id))
-        
+
         # Record a trigger
         watcher._last_trigger_times[alert_id] = datetime.now()
-        
+
         # Immediately after - should NOT fire (within cooldown)
         self.assertFalse(watcher._should_fire_alert(alert_id))
-        
+
         # Simulate trigger in the past (beyond cooldown)
         watcher._last_trigger_times[alert_id] = datetime.now() - timedelta(seconds=1.5)
-        
+
         # After cooldown - should fire again
         self.assertTrue(watcher._should_fire_alert(alert_id))
 
@@ -413,7 +418,7 @@ class TestDedupeBehavior(unittest.TestCase):
 class TestPersistenceFile(unittest.TestCase):
     """
     Test Suite 3: Persistence File
-    
+
     Validates that alerts are correctly saved to and loaded from JSON files,
     supporting create, read, update, and delete operations.
     """
@@ -436,14 +441,14 @@ class TestPersistenceFile(unittest.TestCase):
             target_price=0.75,
             storage_path=self.storage_path,
         )
-        
+
         # Verify file was created
         self.assertTrue(os.path.exists(self.storage_path))
-        
+
         # Verify JSON structure
-        with open(self.storage_path, 'r') as f:
+        with open(self.storage_path, "r") as f:
             data = json.load(f)
-        
+
         self.assertIn(alert_id, data)
         self.assertEqual(data[alert_id]["market_id"], "mock_market_200")
         self.assertEqual(data[alert_id]["direction"], "above")
@@ -456,10 +461,10 @@ class TestPersistenceFile(unittest.TestCase):
         id1 = add_alert("market_201", "above", 0.60, storage_path=self.storage_path)
         id2 = add_alert("market_202", "below", 0.40, storage_path=self.storage_path)
         id3 = add_alert("market_203", "above", 0.80, storage_path=self.storage_path)
-        
+
         # Read alerts (read)
         alerts = list_alerts(storage_path=self.storage_path)
-        
+
         # Verify all alerts are present
         self.assertEqual(len(alerts), 3)
         alert_ids = [a["id"] for a in alerts]
@@ -471,16 +476,16 @@ class TestPersistenceFile(unittest.TestCase):
         """Test that alerts can be updated (remove + add pattern)."""
         # Create initial alert
         id1 = add_alert("market_204", "above", 0.65, storage_path=self.storage_path)
-        
+
         # Read it back
         alerts = list_alerts(storage_path=self.storage_path)
         self.assertEqual(len(alerts), 1)
         self.assertEqual(alerts[0]["target_price"], 0.65)
-        
+
         # "Update" by removing old and adding new (simulates update pattern)
         remove_alert(id1, storage_path=self.storage_path)
         id2 = add_alert("market_204", "above", 0.70, storage_path=self.storage_path)
-        
+
         # Verify update
         alerts = list_alerts(storage_path=self.storage_path)
         self.assertEqual(len(alerts), 1)
@@ -492,22 +497,22 @@ class TestPersistenceFile(unittest.TestCase):
         # Create alerts
         id1 = add_alert("market_205", "above", 0.60, storage_path=self.storage_path)
         id2 = add_alert("market_206", "below", 0.40, storage_path=self.storage_path)
-        
+
         # Verify both exist
         alerts = list_alerts(storage_path=self.storage_path)
         self.assertEqual(len(alerts), 2)
-        
+
         # Delete one (delete)
         result = remove_alert(id1, storage_path=self.storage_path)
         self.assertTrue(result)
-        
+
         # Verify deletion
         alerts = list_alerts(storage_path=self.storage_path)
         self.assertEqual(len(alerts), 1)
         self.assertEqual(alerts[0]["id"], id2)
-        
+
         # Verify file still exists and is valid JSON
-        with open(self.storage_path, 'r') as f:
+        with open(self.storage_path, "r") as f:
             data = json.load(f)
         self.assertEqual(len(data), 1)
         self.assertIn(id2, data)
@@ -518,11 +523,11 @@ class TestPersistenceFile(unittest.TestCase):
         # Session 1: Create alerts
         id1 = add_alert("market_207", "above", 0.65, storage_path=self.storage_path)
         id2 = add_alert("market_208", "below", 0.35, storage_path=self.storage_path)
-        
+
         # Simulate process restart by clearing in-memory state
         # (just re-read from file)
         alerts_after_restart = list_alerts(storage_path=self.storage_path)
-        
+
         # Verify alerts survived
         self.assertEqual(len(alerts_after_restart), 2)
         alert_ids = [a["id"] for a in alerts_after_restart]
@@ -533,14 +538,14 @@ class TestPersistenceFile(unittest.TestCase):
         """Test that corrupted JSON file is handled gracefully."""
         # Create directory
         os.makedirs(os.path.dirname(self.storage_path), exist_ok=True)
-        
+
         # Write corrupted JSON
-        with open(self.storage_path, 'w') as f:
+        with open(self.storage_path, "w") as f:
             f.write("{invalid json content {{")
-        
+
         # Try to load - should handle gracefully
         loaded_alerts = _load_alerts(self.storage_path)
-        
+
         # Should return empty dict and create backup
         self.assertEqual(loaded_alerts, {})
         self.assertTrue(os.path.exists(f"{self.storage_path}.backup"))
@@ -550,16 +555,16 @@ class TestPersistenceFile(unittest.TestCase):
         # Add alerts
         add_alert("market_209", "above", 0.70, storage_path=self.storage_path)
         add_alert("market_210", "below", 0.30, storage_path=self.storage_path)
-        
+
         # Read and verify JSON structure
-        with open(self.storage_path, 'r') as f:
+        with open(self.storage_path, "r") as f:
             content = f.read()
             data = json.loads(content)
-        
+
         # Verify it's properly formatted (indented)
-        self.assertIn('\n', content)  # Should have newlines (formatted)
-        self.assertIn('  ', content)  # Should have indentation
-        
+        self.assertIn("\n", content)  # Should have newlines (formatted)
+        self.assertIn("  ", content)  # Should have indentation
+
         # Verify structure
         self.assertIsInstance(data, dict)
         for alert_id, alert_data in data.items():
@@ -575,7 +580,7 @@ class TestPersistenceFile(unittest.TestCase):
 class TestAlertLogging(unittest.TestCase):
     """
     Test Suite 4: Alert Logging
-    
+
     Validates that alerts are properly logged when triggered,
     including log messages and callback invocations.
     """
@@ -590,32 +595,32 @@ class TestAlertLogging(unittest.TestCase):
         """Clean up test fixtures."""
         shutil.rmtree(self.temp_dir, ignore_errors=True)
 
-    @patch('app.core.price_alerts.logger')
+    @patch("app.core.price_alerts.logger")
     def test_logging_alert_creation(self, mock_logger):
         """Test that alert creation is logged."""
         # Create alert
         create_price_alert("mock_market_300", "above", 0.75)
-        
+
         # Verify logging occurred
         mock_logger.info.assert_called()
         call_args = str(mock_logger.info.call_args)
         self.assertIn("mock_market_300", call_args)
         self.assertIn("above", call_args)
 
-    @patch('app.core.price_alerts.logger')
+    @patch("app.core.price_alerts.logger")
     def test_logging_alert_triggered(self, mock_logger):
         """Test that alert triggers are logged."""
         # Create and check alert
         alert = create_price_alert("mock_market_301", "above", 0.60)
         check_price_alert(alert, 0.75)  # Price above threshold
-        
+
         # Verify trigger was logged
         mock_logger.info.assert_called()
         call_args_list = [str(call) for call in mock_logger.info.call_args_list]
         logged_text = " ".join(call_args_list)
         self.assertIn("triggered", logged_text.lower())
 
-    @patch('app.core.price_alerts.logger')
+    @patch("app.core.price_alerts.logger")
     def test_logging_watcher_alert_fired(self, mock_logger):
         """Test that watcher logs when firing alerts."""
         # Add alert
@@ -626,25 +631,28 @@ class TestAlertLogging(unittest.TestCase):
             alert_id="test_log_001",
             storage_path=self.storage_path,
         )
-        
+
         # Create watcher
         watcher = PriceAlertWatcher(
             api_client=self.mock_api_client,
             storage_path=self.storage_path,
             alert_cooldown=1.0,
         )
-        
+
         # Mock orderbook that triggers alert
         mock_orderbook = NormalizedOrderBook(
-            yes_best_bid=0.69, yes_best_ask=0.71,
-            no_best_bid=0.29, no_best_ask=0.31,
-            market_id="mock_market_302", timestamp=datetime.now(),
+            yes_best_bid=0.69,
+            yes_best_ask=0.71,
+            no_best_bid=0.29,
+            no_best_ask=0.31,
+            market_id="mock_market_302",
+            timestamp=datetime.now(),
         )
-        
+
         # Trigger alert
         watcher._running = True
         watcher._handle_price_update("mock_market_302", mock_orderbook)
-        
+
         # Verify "ALERT FIRED" was logged
         mock_logger.info.assert_called()
         call_args_list = [str(call) for call in mock_logger.info.call_args_list]
@@ -661,19 +669,21 @@ class TestAlertLogging(unittest.TestCase):
             0.40,
             storage_path=self.storage_path,
         )
-        
+
         # Track callback invocations
         callback_calls = []
-        
+
         def mock_callback(alert: PriceAlert):
-            callback_calls.append({
-                "market_id": alert.market_id,
-                "triggered": alert.triggered,
-                "current_price": alert.current_price,
-                "target_price": alert.target_price,
-                "message": alert.alert_message,
-            })
-        
+            callback_calls.append(
+                {
+                    "market_id": alert.market_id,
+                    "triggered": alert.triggered,
+                    "current_price": alert.current_price,
+                    "target_price": alert.target_price,
+                    "message": alert.alert_message,
+                }
+            )
+
         # Create watcher with callback
         watcher = PriceAlertWatcher(
             api_client=self.mock_api_client,
@@ -681,18 +691,21 @@ class TestAlertLogging(unittest.TestCase):
             alert_cooldown=1.0,
             on_alert_triggered=mock_callback,
         )
-        
+
         # Mock orderbook that triggers alert
         mock_orderbook = NormalizedOrderBook(
-            yes_best_bid=0.34, yes_best_ask=0.36,
-            no_best_bid=0.64, no_best_ask=0.66,
-            market_id="mock_market_303", timestamp=datetime.now(),
+            yes_best_bid=0.34,
+            yes_best_ask=0.36,
+            no_best_bid=0.64,
+            no_best_ask=0.66,
+            market_id="mock_market_303",
+            timestamp=datetime.now(),
         )
-        
+
         # Trigger alert
         watcher._running = True
         watcher._handle_price_update("mock_market_303", mock_orderbook)
-        
+
         # Verify callback was invoked with correct data
         self.assertEqual(len(callback_calls), 1)
         self.assertEqual(callback_calls[0]["market_id"], "mock_market_303")
@@ -701,7 +714,7 @@ class TestAlertLogging(unittest.TestCase):
         self.assertEqual(callback_calls[0]["target_price"], 0.40)
         self.assertIn("below", callback_calls[0]["message"].lower())
 
-    @patch('app.core.price_alerts.logger')
+    @patch("app.core.price_alerts.logger")
     def test_logging_callback_exception_handling(self, mock_logger):
         """Test that callback exceptions are logged and don't crash watcher."""
         # Add alert
@@ -711,11 +724,11 @@ class TestAlertLogging(unittest.TestCase):
             0.60,
             storage_path=self.storage_path,
         )
-        
+
         # Create callback that raises exception
         def failing_callback(alert):
             raise ValueError("Intentional test exception")
-        
+
         # Create watcher with failing callback
         watcher = PriceAlertWatcher(
             api_client=self.mock_api_client,
@@ -723,24 +736,27 @@ class TestAlertLogging(unittest.TestCase):
             alert_cooldown=1.0,
             on_alert_triggered=failing_callback,
         )
-        
+
         # Mock orderbook
         mock_orderbook = NormalizedOrderBook(
-            yes_best_bid=0.69, yes_best_ask=0.71,
-            no_best_bid=0.29, no_best_ask=0.31,
-            market_id="mock_market_304", timestamp=datetime.now(),
+            yes_best_bid=0.69,
+            yes_best_ask=0.71,
+            no_best_bid=0.29,
+            no_best_ask=0.31,
+            market_id="mock_market_304",
+            timestamp=datetime.now(),
         )
-        
+
         # Trigger alert - should not crash
         watcher._running = True
         watcher._handle_price_update("mock_market_304", mock_orderbook)
-        
+
         # Verify error was logged
         mock_logger.error.assert_called()
         call_args = str(mock_logger.error.call_args)
         self.assertIn("callback", call_args.lower())
 
-    @patch('app.core.price_alerts.logger')
+    @patch("app.core.price_alerts.logger")
     def test_logging_add_and_remove_alerts(self, mock_logger):
         """Test that adding and removing alerts is logged."""
         # Add alert
@@ -750,16 +766,16 @@ class TestAlertLogging(unittest.TestCase):
             0.75,
             storage_path=self.storage_path,
         )
-        
+
         # Verify add was logged
         mock_logger.info.assert_called()
         call_args = str(mock_logger.info.call_args)
         self.assertIn("Added", call_args)
         self.assertIn(alert_id, call_args)
-        
+
         # Remove alert
         remove_alert(alert_id, storage_path=self.storage_path)
-        
+
         # Verify remove was logged
         call_args_list = [str(call) for call in mock_logger.info.call_args_list]
         logged_text = " ".join(call_args_list)
@@ -770,7 +786,7 @@ class TestAlertLogging(unittest.TestCase):
 class TestNoNetworkCalls(unittest.TestCase):
     """
     Test Suite 5: No Network Calls
-    
+
     Validates that all tests use mock data and no actual network calls are made.
     """
 
@@ -785,18 +801,16 @@ class TestNoNetworkCalls(unittest.TestCase):
                 {"name": "No", "price": 0.35},
             ],
         }
-        
+
         # Verify structure
         self.assertIn("id", mock_data)
         self.assertIn("outcomes", mock_data)
         self.assertIsInstance(mock_data["outcomes"], list)
         self.assertGreater(len(mock_data["outcomes"]), 0)
         self.assertIn("price", mock_data["outcomes"][0])
-        
+
         # Use in alert
-        alert = watch_market_price(
-            "mock_market_400", "above", 0.60, mock_data
-        )
+        alert = watch_market_price("mock_market_400", "above", 0.60, mock_data)
         self.assertIsNotNone(alert)
 
     def test_mock_api_client_no_real_connection(self):
@@ -805,30 +819,30 @@ class TestNoNetworkCalls(unittest.TestCase):
         mock_client = MagicMock()
         mock_client.subscribe_to_markets = MagicMock()
         mock_client.stop_websocket = MagicMock()
-        
+
         # Create watcher with mock client
         temp_dir = tempfile.mkdtemp()
         try:
             storage_path = os.path.join(temp_dir, "data", "test_alerts.json")
             add_alert("mock_market_401", "above", 0.60, storage_path=storage_path)
-            
+
             watcher = PriceAlertWatcher(
                 api_client=mock_client,
                 storage_path=storage_path,
                 alert_cooldown=1.0,
             )
-            
+
             # Start watcher
             watcher.start()
             time.sleep(0.1)
-            
+
             # Verify mock was called (not real network)
             mock_client.subscribe_to_markets.assert_called_once()
-            
+
             # Stop watcher
             watcher.stop()
             mock_client.stop_websocket.assert_called()
-            
+
         finally:
             shutil.rmtree(temp_dir, ignore_errors=True)
 
@@ -843,7 +857,7 @@ class TestNoNetworkCalls(unittest.TestCase):
             market_id="mock_market_402",
             timestamp=datetime.now(),
         )
-        
+
         # Verify structure
         self.assertIsNotNone(mock_orderbook.yes_best_ask)
         self.assertIsNotNone(mock_orderbook.market_id)
