@@ -166,13 +166,15 @@ class TestEventCorrelationAnalyzer(unittest.TestCase):
             timestamp = base_time + timedelta(minutes=i)
             # Price increases gradually
             price = 0.50 + (i / 60) * 0.05
-            ticks.append({
-                "market_id": "market_test_1",
-                "timestamp": timestamp.isoformat(),
-                "yes_price": price,
-                "no_price": 1.0 - price,
-                "volume": 1000.0 + i * 10,
-            })
+            ticks.append(
+                {
+                    "market_id": "market_test_1",
+                    "timestamp": timestamp.isoformat(),
+                    "yes_price": price,
+                    "no_price": 1.0 - price,
+                    "volume": 1000.0 + i * 10,
+                }
+            )
 
         append_ticks(ticks, db_path=self.history_db_path)
 
@@ -406,8 +408,7 @@ class TestEventCorrelationAnalyzer(unittest.TestCase):
         # Should be either tick at minute 2 or 3
         closest_time = self.analyzer._parse_timestamp(closest["timestamp"])
         self.assertIn(
-            closest_time,
-            [base_time + timedelta(minutes=2), base_time + timedelta(minutes=3)]
+            closest_time, [base_time + timedelta(minutes=2), base_time + timedelta(minutes=3)]
         )
 
     def test_find_price_at_offset(self):
@@ -447,13 +448,15 @@ class TestEventCorrelationAnalyzer(unittest.TestCase):
                 # Price stabilizes around 0.60
                 price = 0.60
 
-            ticks.append({
-                "timestamp": (base_time + timedelta(minutes=i)).isoformat(),
-                "yes_price": price,
-                "no_price": 1.0 - price,
-                "market_id": "test",
-                "volume": 1000.0,
-            })
+            ticks.append(
+                {
+                    "timestamp": (base_time + timedelta(minutes=i)).isoformat(),
+                    "yes_price": price,
+                    "no_price": 1.0 - price,
+                    "market_id": "test",
+                    "volume": 1000.0,
+                }
+            )
 
         max_move, time_to_resolution = self.analyzer._compute_resolution_metrics(
             ticks, base_time, initial_price
@@ -504,13 +507,15 @@ class TestIntegrationScenarios(unittest.TestCase):
                 # Price stabilizes
                 price = 0.70
 
-            ticks.append({
-                "market_id": "realistic_market",
-                "timestamp": (base_time + timedelta(minutes=i)).isoformat(),
-                "yes_price": price,
-                "no_price": 1.0 - price,
-                "volume": 1000.0 + i * 50,
-            })
+            ticks.append(
+                {
+                    "market_id": "realistic_market",
+                    "timestamp": (base_time + timedelta(minutes=i)).isoformat(),
+                    "yes_price": price,
+                    "no_price": 1.0 - price,
+                    "volume": 1000.0 + i * 50,
+                }
+            )
 
         append_ticks(ticks, db_path=self.history_db_path)
 
