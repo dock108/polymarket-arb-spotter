@@ -126,8 +126,8 @@ class TestDepthViewIntegration(unittest.TestCase):
 
     def test_custom_thresholds(self):
         """Test that custom thresholds affect signal detection."""
-        # Create an orderbook with total depth of 200 (50+50+50+50)
-        # YES depth = 100, NO depth = 100, total = 200 (below 500 threshold)
+        # Create an orderbook with YES depth of 200 (50+50+50+50)
+        # For binary markets: total_depth = YES + NO = 200 + 200 = 400
         orderbook = {
             "bids": [
                 {"price": "0.45", "size": "50"},
@@ -141,7 +141,7 @@ class TestDepthViewIntegration(unittest.TestCase):
 
         metrics = analyze_depth(orderbook)
 
-        # With default thresholds (min_depth=500), total depth of 400 (200*2)
+        # With default thresholds (min_depth=500), total depth of 400
         # should trigger thin_depth
         default_signals = detect_depth_signals(metrics, config=DEFAULT_CONFIG)
         default_types = {s.signal_type for s in default_signals}
