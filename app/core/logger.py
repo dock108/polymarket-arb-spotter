@@ -144,7 +144,7 @@ def log_event(data: Dict[str, Any], db_path: str = _DB_PATH) -> None:
             event_data["timestamp"] = event_data["timestamp"].isoformat()
 
         db["arbitrage_events"].insert(event_data)
-    
+
     except Exception as e:
         logger.error(f"Error logging event to database: {e}", exc_info=True)
         # Don't re-raise to allow continued processing
@@ -185,7 +185,7 @@ def fetch_recent(limit: int = 100, db_path: str = _DB_PATH) -> List[Dict[str, An
         ]
 
         return [dict(zip(columns, row)) for row in rows]
-    
+
     except Exception as e:
         logger.error(f"Error fetching recent events: {e}", exc_info=True)
         return []
@@ -195,20 +195,20 @@ def fetch_recent(limit: int = 100, db_path: str = _DB_PATH) -> List[Dict[str, An
 class HealthHeartbeat:
     """
     Health heartbeat monitor that logs periodic health status.
-    
+
     This class runs a background thread that logs a heartbeat message
     at regular intervals to indicate the system is running and healthy.
     """
-    
+
     def __init__(
         self,
         interval: int = 60,
         callback: Optional[Callable[[], Dict[str, Any]]] = None,
-        logger_instance: Optional[logging.Logger] = None
+        logger_instance: Optional[logging.Logger] = None,
     ):
         """
         Initialize health heartbeat monitor.
-        
+
         Args:
             interval: Interval in seconds between heartbeat logs (default: 60)
             callback: Optional callback function that returns health metrics dict
@@ -220,33 +220,33 @@ class HealthHeartbeat:
         self._running = False
         self._thread: Optional[threading.Thread] = None
         self._stop_event = threading.Event()
-    
+
     def start(self) -> None:
         """Start the heartbeat monitoring thread."""
         if self._running:
             self.logger.warning("Heartbeat already running")
             return
-        
+
         self._running = True
         self._stop_event.clear()
         self._thread = threading.Thread(target=self._run, daemon=True)
         self._thread.start()
         self.logger.info(f"Health heartbeat started (interval: {self.interval}s)")
-    
+
     def stop(self) -> None:
         """Stop the heartbeat monitoring thread."""
         if not self._running:
             return
-        
+
         self._running = False
         self._stop_event.set()
-        
+
         if self._thread:
             self._thread.join(timeout=self.interval + 1)
             self._thread = None
-        
+
         self.logger.info("Health heartbeat stopped")
-    
+
     def _run(self) -> None:
         """Main heartbeat loop (runs in background thread)."""
         try:
@@ -259,30 +259,32 @@ class HealthHeartbeat:
                             metrics = self.callback()
                         except Exception as e:
                             self.logger.error(f"Error getting health metrics: {e}")
-                    
+
                     # Log heartbeat
                     timestamp = datetime.now().isoformat()
                     if metrics:
-                        self.logger.info(f"HEARTBEAT [{timestamp}] - Status: healthy - Metrics: {metrics}")
+                        self.logger.info(
+                            f"HEARTBEAT [{timestamp}] - Status: healthy - Metrics: {metrics}"
+                        )
                     else:
                         self.logger.info(f"HEARTBEAT [{timestamp}] - Status: healthy")
-                
+
                 except Exception as e:
                     self.logger.error(f"Error in heartbeat loop: {e}", exc_info=True)
-                
+
                 # Wait for next heartbeat (or stop signal)
                 self._stop_event.wait(timeout=self.interval)
-        
+
         except Exception as e:
             self.logger.error(f"Fatal error in heartbeat thread: {e}", exc_info=True)
         finally:
             self._running = False
-    
+
     def __enter__(self):
         """Context manager entry."""
         self.start()
         return self
-    
+
     def __exit__(self, exc_type, exc_val, exc_tb):
         """Context manager exit."""
         self.stop()
@@ -292,26 +294,28 @@ class HealthHeartbeat:
 def start_heartbeat(
     interval: int = 60,
     callback: Optional[Callable[[], Dict[str, Any]]] = None,
-    logger_instance: Optional[logging.Logger] = None
+    logger_instance: Optional[logging.Logger] = None,
 ) -> HealthHeartbeat:
     """
     Start a health heartbeat monitor.
-    
+
     This is a convenience function to create and start a heartbeat monitor.
-    
+
     Args:
         interval: Interval in seconds between heartbeat logs (default: 60)
         callback: Optional callback function that returns health metrics dict
         logger_instance: Logger to use (defaults to module logger)
-    
+
     Returns:
         HealthHeartbeat instance (already started)
-    
+
     Example:
         >>> heartbeat = start_heartbeat(interval=60)
         >>> # ... do work ...
         >>> heartbeat.stop()
     """
-    heartbeat = HealthHeartbeat(interval=interval, callback=callback, logger_instance=logger_instance)
+    heartbeat = HealthHeartbeat(
+        interval=interval, callback=callback, logger_instance=logger_instance
+    )
     heartbeat.start()
     return heartbeat

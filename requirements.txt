@@ -11,8 +11,7 @@ numpy>=1.24.0
 # HTTP Client for API
 requests>=2.31.0
 
-# Database (SQLite is built-in, but we may want additional tools)
-# SQLite support is included in Python standard library
+# Database utilities
 sqlite-utils>=3.35.0
 
 # Utilities
@@ -32,8 +31,3 @@ python-dotenv>=1.0.0
 
 # WebSocket support for real-time data
 websocket-client>=1.6.0
-
-# TODO: Add additional dependencies as needed:
-# - schedule for task scheduling
-# - prometheus-client for metrics export
-# - aiohttp for async API calls

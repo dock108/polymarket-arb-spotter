@@ -356,15 +356,15 @@ class PolymarketAPIClient:
 
         def _on_close(ws: Any, close_status_code: Any, close_msg: Any) -> None:
             """Handle WebSocket connection close."""
-            logger.info(
-                f"WebSocket closed: code={close_status_code}, msg={close_msg}"
-            )
+            logger.info(f"WebSocket closed: code={close_status_code}, msg={close_msg}")
             if on_close:
                 on_close()
 
         def _on_open(ws: Any) -> None:
             """Handle WebSocket connection open."""
-            logger.info(f"WebSocket connected, subscribing to {len(market_ids)} markets")
+            logger.info(
+                f"WebSocket connected, subscribing to {len(market_ids)} markets"
+            )
 
             # Subscribe to markets
             for market_id in market_ids:
@@ -579,9 +579,7 @@ def normalize_orderbook_from_json(
     # Extract bids (buy orders)
     bids = raw_data.get("bids", [])
     if bids:
-        sorted_bids = sorted(
-            bids, key=lambda x: float(x.get("price", 0)), reverse=True
-        )
+        sorted_bids = sorted(bids, key=lambda x: float(x.get("price", 0)), reverse=True)
         if sorted_bids:
             normalized.yes_best_bid = float(sorted_bids[0].get("price", 0))
 
