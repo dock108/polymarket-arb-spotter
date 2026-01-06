@@ -40,7 +40,6 @@ def load_depth_config(config_path: Optional[str] = None) -> Dict[str, Any]:
             - markets_to_watch: List of market IDs to monitor
 
     Raises:
-        FileNotFoundError: If config file doesn't exist and no default can be created
         json.JSONDecodeError: If config file contains invalid JSON
 
     Example:

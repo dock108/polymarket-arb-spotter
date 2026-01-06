@@ -28,10 +28,27 @@ class TestDepthConfigHelpers(unittest.TestCase):
 
     def tearDown(self):
         """Clean up temporary test files."""
+        # Clean up any files in test directory
         if os.path.exists(self.test_config_path):
             os.remove(self.test_config_path)
+        
+        # Clean up any nested directories that might have been created
         if os.path.exists(self.test_dir):
-            os.rmdir(self.test_dir)
+            for root, dirs, files in os.walk(self.test_dir, topdown=False):
+                for name in files:
+                    try:
+                        os.remove(os.path.join(root, name))
+                    except OSError:
+                        pass
+                for name in dirs:
+                    try:
+                        os.rmdir(os.path.join(root, name))
+                    except OSError:
+                        pass
+            try:
+                os.rmdir(self.test_dir)
+            except OSError:
+                pass
 
     def test_load_default_config_creates_file(self):
         """Test that loading config creates default file if it doesn't exist."""
@@ -178,9 +195,10 @@ class TestDepthConfigHelpers(unittest.TestCase):
             "imbalance": 0.0,
         }
 
-        # With default thresholds, should trigger thin_depth (600 < 500)
+        # With default thresholds, total depth is 600 which is above 500 threshold
+        # so it should NOT trigger thin_depth signal
         default_signals = detect_depth_signals(metrics)
-        self.assertEqual(len(default_signals), 0)  # 600 is above 500 threshold
+        self.assertEqual(len(default_signals), 0)
 
         # Now with custom config that has higher min_depth threshold
         custom_config = {
