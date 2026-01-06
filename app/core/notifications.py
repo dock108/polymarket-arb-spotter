@@ -431,9 +431,11 @@ def send_price_alert(alert: Any) -> bool:
             success = service._send_email(subject, message)
 
         if success:
+            # Safe formatting for logging
+            target_price_str = f"{target_price:.4f}" if target_price is not None else "N/A"
             logger.info(
                 f"Price alert sent successfully via {service.config.alert_method}: "
-                f"{market_name} - {direction} {target_price:.4f}"
+                f"{market_name} - {direction} {target_price_str}"
             )
         else:
             logger.warning(
