@@ -439,6 +439,62 @@ class PolymarketAPIClient:
                 logger.warning(f"Error closing WebSocket: {e}")
             self._ws = None
 
+    def subscribe_to_markets(
+        self,
+        market_ids: List[str],
+        on_price_update: Callable[[str, NormalizedOrderBook], None],
+        on_error: Optional[Callable[[Exception], None]] = None,
+    ) -> None:
+        """
+        Subscribe to real-time price updates for specific markets.
+
+        This is a simplified interface for subscribing to market price updates.
+        It automatically normalizes orderbook data and calls the callback
+        with market_id and normalized price data.
+
+        Args:
+            market_ids: List of market/token IDs to subscribe to
+            on_price_update: Callback function(market_id, orderbook) called on each update
+            on_error: Optional callback for errors
+
+        Note:
+            This method runs in the current thread and blocks. Use in a separate
+            thread or process if you need non-blocking behavior.
+        """
+        if not market_ids:
+            logger.warning("No market IDs provided for subscription")
+            return
+
+        def _handle_ws_message(message: Dict[str, Any]) -> None:
+            """Process WebSocket message and extract price data."""
+            try:
+                # Parse message type and extract relevant data
+                # Expected format: {"type": "...", "market": "...", "data": {...}}
+                msg_type = message.get("type")
+                
+                if msg_type == "book":
+                    # Order book update
+                    market_id = message.get("market", message.get("asset_id", ""))
+                    book_data = message.get("data", message)
+                    
+                    # Normalize the orderbook
+                    normalized = self._normalize_orderbook(book_data, market_id)
+                    on_price_update(market_id, normalized)
+                    
+            except Exception as e:
+                logger.error(f"Error processing WebSocket message: {e}")
+                if on_error:
+                    on_error(e)
+
+        # Use the existing websocket_stream_prices with callback
+        logger.info(f"Starting subscription to {len(market_ids)} markets")
+        for _ in self.websocket_stream_prices(
+            market_ids=market_ids,
+            on_message=_handle_ws_message,
+            on_error=on_error,
+        ):
+            pass  # Messages are handled via callback
+
     # Legacy method aliases for backward compatibility
     def get_markets(
         self,
