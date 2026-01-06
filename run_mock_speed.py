@@ -24,7 +24,7 @@ from pathlib import Path
 from app.core.simulator import Simulator
 from app.core.arb_detector import ArbitrageDetector
 from app.core.mock_data import MockDataGenerator
-from app.core.logger import logger, setup_logger, init_db, log_event
+from app.core.logger import logger, setup_logger, init_db, log_event, start_heartbeat
 from app.core.config import get_config
 
 # Default log database path (can be overridden by config)
@@ -308,6 +308,15 @@ def main():
     except Exception:
         log_db_path = DEFAULT_LOG_DB_PATH
     
+    # Start health heartbeat monitor
+    heartbeat = start_heartbeat(
+        interval=60,
+        callback=lambda: {
+            "mode": args.mode,
+            "status": "running"
+        }
+    )
+    
     try:
         if args.mode == 'speed':
             # Time-based test
@@ -358,8 +367,12 @@ def main():
     
     except Exception as e:
         print(f"\n\nError during speed test: {e}")
-        log.error(f"Speed test failed: {e}")
+        log.error(f"Speed test failed: {e}", exc_info=True)
         return 1
+    
+    finally:
+        # Stop heartbeat monitor
+        heartbeat.stop()
 
 
 if __name__ == "__main__":

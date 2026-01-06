@@ -143,15 +143,25 @@ class ArbitrageDetector:
             List of detected arbitrage opportunities
         """
         opportunities = []
-        logger.info(f"Analyzing {len(market_data)} markets for arbitrage opportunities")
         
-        for market in market_data:
-            opp = self._check_two_way_arbitrage(market)
-            if opp:
-                opportunities.append(opp)
+        try:
+            logger.info(f"Analyzing {len(market_data)} markets for arbitrage opportunities")
+            
+            for market in market_data:
+                try:
+                    opp = self._check_two_way_arbitrage(market)
+                    if opp:
+                        opportunities.append(opp)
+                except Exception as e:
+                    market_id = market.get('id', 'unknown')
+                    logger.error(f"Error checking arbitrage for market {market_id}: {e}")
+                    # Continue processing other markets
+            
+            if opportunities:
+                logger.info(f"Found {len(opportunities)} arbitrage opportunities")
         
-        if opportunities:
-            logger.info(f"Found {len(opportunities)} arbitrage opportunities")
+        except Exception as e:
+            logger.error(f"Error in detect_opportunities: {e}", exc_info=True)
         
         return opportunities
     
@@ -357,33 +367,38 @@ class ArbitrageDetector:
         TODO: Add duplicate detection
         TODO: Add opportunity status tracking
         """
-        # Use persistent connection for in-memory database
-        if self._conn:
-            conn = self._conn
-        else:
-            conn = sqlite3.connect(self.db_path)
+        try:
+            # Use persistent connection for in-memory database
+            if self._conn:
+                conn = self._conn
+            else:
+                conn = sqlite3.connect(self.db_path)
+            
+            cursor = conn.cursor()
+            
+            cursor.execute("""
+                INSERT INTO opportunities 
+                (market_id, market_name, opportunity_type, expected_profit, 
+                 expected_return_pct, detected_at, risk_score)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            """, (
+                opportunity.market_id,
+                opportunity.market_name,
+                opportunity.opportunity_type,
+                opportunity.expected_profit,
+                opportunity.expected_return_pct,
+                opportunity.detected_at.isoformat(),
+                opportunity.risk_score
+            ))
+            
+            conn.commit()
+            if not self._conn:
+                conn.close()
+            logger.info(f"Saved opportunity for market {opportunity.market_id}")
         
-        cursor = conn.cursor()
-        
-        cursor.execute("""
-            INSERT INTO opportunities 
-            (market_id, market_name, opportunity_type, expected_profit, 
-             expected_return_pct, detected_at, risk_score)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-        """, (
-            opportunity.market_id,
-            opportunity.market_name,
-            opportunity.opportunity_type,
-            opportunity.expected_profit,
-            opportunity.expected_return_pct,
-            opportunity.detected_at.isoformat(),
-            opportunity.risk_score
-        ))
-        
-        conn.commit()
-        if not self._conn:
-            conn.close()
-        logger.info(f"Saved opportunity for market {opportunity.market_id}")
+        except Exception as e:
+            logger.error(f"Error saving opportunity for market {opportunity.market_id}: {e}", exc_info=True)
+            # Don't re-raise to allow continued processing
     
     def get_recent_opportunities(self, limit: int = 100) -> List[Dict[str, Any]]:
         """
@@ -398,23 +413,28 @@ class ArbitrageDetector:
         TODO: Add filtering by time range
         TODO: Add filtering by profitability
         """
-        # Use persistent connection for in-memory database
-        if self._conn:
-            conn = self._conn
-        else:
-            conn = sqlite3.connect(self.db_path)
+        try:
+            # Use persistent connection for in-memory database
+            if self._conn:
+                conn = self._conn
+            else:
+                conn = sqlite3.connect(self.db_path)
+            
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+            
+            cursor.execute("""
+                SELECT * FROM opportunities 
+                ORDER BY detected_at DESC 
+                LIMIT ?
+            """, (limit,))
+            
+            rows = cursor.fetchall()
+            if not self._conn:
+                conn.close()
+            
+            return [dict(row) for row in rows]
         
-        conn.row_factory = sqlite3.Row
-        cursor = conn.cursor()
-        
-        cursor.execute("""
-            SELECT * FROM opportunities 
-            ORDER BY detected_at DESC 
-            LIMIT ?
-        """, (limit,))
-        
-        rows = cursor.fetchall()
-        if not self._conn:
-            conn.close()
-        
-        return [dict(row) for row in rows]
+        except Exception as e:
+            logger.error(f"Error fetching recent opportunities: {e}", exc_info=True)
+            return []
