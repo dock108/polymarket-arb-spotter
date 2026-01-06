@@ -40,7 +40,14 @@ class Config:
     # Alert Configuration
     alert_method: Optional[Literal["email", "telegram"]] = None
     telegram_api_key: Optional[str] = None
+    telegram_chat_id: Optional[str] = None
     email_smtp_server: Optional[str] = None
+    email_smtp_port: int = 587
+    email_username: Optional[str] = None
+    email_password: Optional[str] = None
+    email_from: Optional[str] = None
+    email_to: Optional[str] = None
+    notification_throttle_seconds: int = 300  # 5 minutes default
     
     # Logging Configuration
     log_level: str = "INFO"
@@ -56,7 +63,14 @@ class Config:
         - FEE_BUFFER_PERCENT: Fee buffer percentage (default: 0.5)
         - ALERT_METHOD: Alert method - "email" or "telegram" (optional)
         - TELEGRAM_API_KEY: Telegram bot API key (optional)
+        - TELEGRAM_CHAT_ID: Telegram chat ID (optional)
         - EMAIL_SMTP_SERVER: Email SMTP server (optional)
+        - EMAIL_SMTP_PORT: Email SMTP port (default: 587)
+        - EMAIL_USERNAME: Email username for authentication (optional)
+        - EMAIL_PASSWORD: Email password for authentication (optional)
+        - EMAIL_FROM: Email sender address (optional)
+        - EMAIL_TO: Email recipient address (optional)
+        - NOTIFICATION_THROTTLE_SECONDS: Seconds between notifications (default: 300)
         - LOG_DB_PATH: Path to log database (default: data/arb_logs.sqlite)
         - LOG_LEVEL: Logging level (default: INFO)
         - API_ENDPOINT: Polymarket API endpoint
@@ -83,7 +97,14 @@ class Config:
             alert_method = alert_method.lower()
         
         telegram_api_key = os.getenv("TELEGRAM_API_KEY")
+        telegram_chat_id = os.getenv("TELEGRAM_CHAT_ID")
         email_smtp_server = os.getenv("EMAIL_SMTP_SERVER")
+        email_smtp_port = int(os.getenv("EMAIL_SMTP_PORT", "587"))
+        email_username = os.getenv("EMAIL_USERNAME")
+        email_password = os.getenv("EMAIL_PASSWORD")
+        email_from = os.getenv("EMAIL_FROM")
+        email_to = os.getenv("EMAIL_TO")
+        notification_throttle_seconds = int(os.getenv("NOTIFICATION_THROTTLE_SECONDS", "300"))
         
         # Load database path
         log_db_path = os.getenv("LOG_DB_PATH", "data/arb_logs.sqlite")
@@ -108,7 +129,14 @@ class Config:
             max_stake=max_stake,
             alert_method=alert_method,
             telegram_api_key=telegram_api_key,
+            telegram_chat_id=telegram_chat_id,
             email_smtp_server=email_smtp_server,
+            email_smtp_port=email_smtp_port,
+            email_username=email_username,
+            email_password=email_password,
+            email_from=email_from,
+            email_to=email_to,
+            notification_throttle_seconds=notification_throttle_seconds,
             log_level=log_level,
             log_file=log_file,
         )
@@ -149,10 +177,22 @@ class Config:
                 "Telegram alerts will not work."
             )
         
+        if self.alert_method == "telegram" and not self.telegram_chat_id:
+            _logger.warning(
+                "ALERT_METHOD is set to 'telegram' but TELEGRAM_CHAT_ID is not configured. "
+                "Telegram alerts will not work."
+            )
+        
         if self.alert_method == "email" and not self.email_smtp_server:
             _logger.warning(
                 "ALERT_METHOD is set to 'email' but EMAIL_SMTP_SERVER is not configured. "
                 "Email alerts will not work."
+            )
+        
+        if self.alert_method == "email" and not all([self.email_username, self.email_password, self.email_from, self.email_to]):
+            _logger.warning(
+                "ALERT_METHOD is set to 'email' but one or more email credentials are missing "
+                "(EMAIL_USERNAME, EMAIL_PASSWORD, EMAIL_FROM, EMAIL_TO). Email alerts will not work."
             )
         
         # Log configuration summary
