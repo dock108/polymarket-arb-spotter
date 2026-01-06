@@ -37,7 +37,6 @@ from app.core.replay import (  # noqa: E402
     PlaybackSpeed,
 )
 from app.core.arb_detector import ArbitrageDetector  # noqa: E402
-from app.core.logger import logger  # noqa: E402
 
 
 class ReplayArbitrageAnalyzer:
@@ -119,32 +118,37 @@ class ReplayArbitrageAnalyzer:
 
     def print_summary(self) -> None:
         """Print analysis summary."""
-        print(f"\n{'='*60}")
+        print("=" * 60)
         print("Analysis Summary")
-        print(f"{'='*60}")
+        print("=" * 60)
         print(f"Ticks processed: {self.stats['ticks_processed']}")
         print(f"Markets analyzed: {len(self.stats['markets_analyzed'])}")
         print(f"Opportunities found: {self.stats['opportunities_found']}")
 
         if self.opportunities:
             total_profit = sum(o["expected_profit"] for o in self.opportunities)
-            avg_return = sum(o["expected_return_pct"] for o in self.opportunities) / len(
-                self.opportunities
+            avg_return = (
+                sum(o["expected_return_pct"] for o in self.opportunities)
+                / len(self.opportunities)
             )
-            print(f"\nProfitability:")
+            print("\nProfitability:")
             print(f"  Total expected profit: ${total_profit:.2f}")
             print(f"  Average return: {avg_return:.2f}%")
-            print(f"  Opportunities per market: {self.stats['opportunities_found'] / len(self.stats['markets_analyzed']):.2f}")
+            market_count = len(self.stats['markets_analyzed'])
+            opp_per_market = self.stats['opportunities_found'] / market_count
+            print(f"  Opportunities per market: {opp_per_market:.2f}")
 
         if self.stats["start_time"] and self.stats["end_time"]:
-            duration = (self.stats["end_time"] - self.stats["start_time"]).total_seconds()
-            print(f"\nTiming:")
+            duration = (
+                self.stats["end_time"] - self.stats["start_time"]
+            ).total_seconds()
+            print("\nTiming:")
             print(f"  Duration: {duration:.2f}s")
-            print(
-                f"  Throughput: {self.stats['ticks_processed'] / duration:.2f} ticks/sec"
-            )
+            throughput = self.stats['ticks_processed'] / duration
+            print(f"  Throughput: {throughput:.2f} ticks/sec")
 
-        print(f"{'='*60}\n")
+        print("=" * 60)
+        print()
 
 
 def main():
@@ -188,14 +192,16 @@ def main():
     }
     speed = speed_map[args.speed]
 
-    print(f"\n{'='*60}")
+    print("=" * 60)
     print("Historical Replay with Arbitrage Detection")
-    print(f"{'='*60}")
+    print("=" * 60)
     print(f"Database: {args.db_path}")
-    print(f"Speed: {args.speed}{'×' if args.speed != 'jump' else ' (instant)'}")
+    speed_suffix = "×" if args.speed != "jump" else " (instant)"
+    print(f"Speed: {args.speed}{speed_suffix}")
     if args.market:
         print(f"Market: {args.market}")
-    print(f"{'='*60}\n")
+    print("=" * 60)
+    print()
 
     # Initialize components
     detector = ArbitrageDetector()

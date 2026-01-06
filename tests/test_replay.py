@@ -11,7 +11,7 @@ import tempfile
 import time
 import unittest
 from datetime import datetime, timedelta
-from typing import Any, Dict, List
+from typing import Any, Dict
 
 from app.core.history_store import append_tick, append_ticks
 from app.core.replay import (

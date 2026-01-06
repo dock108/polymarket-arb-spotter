@@ -39,7 +39,6 @@ from app.core.replay import (  # noqa: E402
     HistoricalReplayEngine,
     PlaybackSpeed,
 )
-from app.core.logger import logger  # noqa: E402
 
 
 def process_tick(tick: Dict[str, Any]) -> None:
@@ -104,13 +103,14 @@ def main():
         speed_name = "instant (jump-to-events)"
 
     # Create replay engine
-    print(f"\n{'='*60}")
-    print(f"Historical Replay Engine - Example")
-    print(f"{'='*60}")
+    print("=" * 60)
+    print("Historical Replay Engine - Example")
+    print("=" * 60)
     print(f"Database: {args.db_path}")
     print(f"Speed: {speed_name}")
     print(f"Tick limit per market: {args.limit}")
-    print(f"{'='*60}\n")
+    print("=" * 60)
+    print()
 
     engine = HistoricalReplayEngine(db_path=args.db_path, speed=speed)
 
@@ -135,7 +135,8 @@ def main():
             return 1
 
         print(f"Replaying market: {args.market}\n")
-        print(f"{'─'*60}\n")
+        print("-" * 60)
+        print()
 
         count = engine.replay_market(
             market_id=args.market,
@@ -143,26 +144,28 @@ def main():
             limit=args.limit,
         )
 
-        print(f"\n{'─'*60}")
+        print(f"\n{'-'*60}")
         print(f"✅ Replay complete: {count} ticks processed")
 
     else:
         # Replay all markets
-        print(f"Replaying all markets...\n")
-        print(f"{'─'*60}\n")
+        print("Replaying all markets...\n")
+        print("-" * 60)
+        print()
 
         results = engine.replay_all_markets(
             on_tick=process_tick,
             limit_per_market=args.limit,
         )
 
-        print(f"\n{'─'*60}")
-        print(f"✅ Replay complete:")
+        print(f"\n{'-'*60}")
+        print("✅ Replay complete:")
         for market_id, count in results.items():
             print(f"  - {market_id}: {count} ticks")
         print(f"  Total: {sum(results.values())} ticks")
 
-    print(f"{'='*60}\n")
+    print("=" * 60)
+    print()
     return 0
 
 
