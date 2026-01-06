@@ -333,3 +333,184 @@ def send_alert(alert_object: Dict[str, Any]) -> bool:
     """
     service = get_notification_service()
     return service.send_alert(alert_object)
+
+
+def send_price_alert(alert: Any) -> bool:
+    """
+    Send a price alert notification using the global notification service.
+
+    This function reuses the notification infrastructure to send alerts when
+    market prices cross user-defined thresholds. It handles failures gracefully
+    to prevent crashes in monitoring loops.
+
+    Args:
+        alert: PriceAlert object or dictionary containing alert information.
+            Expected attributes/keys:
+            - market_id: Market identifier
+            - market_name (optional): Human-readable market name
+            - current_price: Current market price
+            - target_price: Threshold price that triggered the alert
+            - direction: Alert direction ("above" or "below")
+            - triggered_at: Timestamp when alert was triggered
+            - alert_message (optional): Custom alert message
+
+    Returns:
+        True if notification was sent successfully, False otherwise.
+        Always returns False (doesn't raise) if errors occur.
+
+    Examples:
+        >>> from app.core.price_alerts import PriceAlert
+        >>> alert = PriceAlert(market_id="btc_100k", direction="above",
+        ...                    target_price=0.65, current_price=0.70)
+        >>> send_price_alert(alert)
+    """
+    try:
+        # Handle both PriceAlert objects and dictionaries
+        if hasattr(alert, "to_dict"):
+            # It's a PriceAlert object
+            alert_dict = alert.to_dict()
+            market_id = alert.market_id
+            market_name = getattr(alert, "market_name", None) or market_id
+            current_price = alert.current_price
+            target_price = alert.target_price
+            direction = alert.direction
+            triggered_at = alert.triggered_at
+            alert_message = alert.alert_message
+        else:
+            # It's a dictionary
+            alert_dict = alert
+            market_id = alert_dict.get("market_id", "Unknown")
+            market_name = alert_dict.get("market_name", market_id)
+            current_price = alert_dict.get("current_price")
+            target_price = alert_dict.get("target_price")
+            direction = alert_dict.get("direction", "unknown")
+            triggered_at = alert_dict.get("triggered_at")
+            alert_message = alert_dict.get("alert_message", "")
+
+        # Get the notification service
+        service = get_notification_service()
+
+        # Check if notifications are enabled
+        if not service.config.alert_method:
+            # Log instead of sending notification
+            # Handle None values gracefully
+            current_price_str = f"{current_price:.4f}" if current_price is not None else "N/A"
+            target_price_str = f"{target_price:.4f}" if target_price is not None else "N/A"
+            triggered_at_str = str(triggered_at) if triggered_at else "N/A"
+            
+            logger.info(
+                f"Price alert triggered (notifications disabled): "
+                f"{market_name} - Price {current_price_str} {direction} "
+                f"threshold {target_price_str} at {triggered_at_str}"
+            )
+            return False
+
+        # Format timestamp
+        timestamp_str = triggered_at.isoformat() if triggered_at else datetime.now().isoformat()
+
+        # Build notification payload
+        notification_data = {
+            "market_id": market_id,
+            "market_name": market_name,
+            "current_price": current_price,
+            "target_price": target_price,
+            "direction": direction,
+            "timestamp": timestamp_str,
+            "alert_message": alert_message,
+        }
+
+        # Format the message for price alerts
+        message = _format_price_alert_message(notification_data)
+        subject = _format_price_alert_subject(notification_data)
+
+        # Send via configured method
+        success = False
+        if service.config.alert_method == "telegram":
+            success = service._send_telegram(message)
+        elif service.config.alert_method == "email":
+            success = service._send_email(subject, message)
+
+        if success:
+            logger.info(
+                f"Price alert sent successfully via {service.config.alert_method}: "
+                f"{market_name} - {direction} {target_price:.4f}"
+            )
+        else:
+            logger.warning(
+                f"Failed to send price alert for {market_name} via "
+                f"{service.config.alert_method}"
+            )
+
+        return success
+
+    except Exception as e:
+        # Gracefully handle any errors to prevent crashing the loop
+        logger.error(f"Error sending price alert: {e}", exc_info=True)
+        return False
+
+
+def _format_price_alert_subject(alert_data: Dict[str, Any]) -> str:
+    """
+    Format the subject line for a price alert.
+
+    Args:
+        alert_data: Dictionary containing alert information
+
+    Returns:
+        Formatted subject string
+    """
+    market_name = alert_data.get("market_name", "Unknown Market")
+    direction = alert_data.get("direction", "unknown")
+    target_price = alert_data.get("target_price")
+    current_price = alert_data.get("current_price")
+    
+    # Handle None values safely
+    target_price_val = target_price if target_price is not None else 0.0
+    current_price_val = current_price if current_price is not None else 0.0
+
+    return (
+        f"🔔 Price Alert: {market_name} "
+        f"({current_price_val:.4f} {direction} {target_price_val:.4f})"
+    )
+
+
+def _format_price_alert_message(alert_data: Dict[str, Any]) -> str:
+    """
+    Format the message body for a price alert.
+
+    Args:
+        alert_data: Dictionary containing alert information
+
+    Returns:
+        Formatted message string
+    """
+    market_name = alert_data.get("market_name", "Unknown Market")
+    market_id = alert_data.get("market_id", "unknown")
+    current_price = alert_data.get("current_price")
+    target_price = alert_data.get("target_price")
+    direction = alert_data.get("direction", "unknown")
+    timestamp = alert_data.get("timestamp", datetime.now().isoformat())
+    alert_message = alert_data.get("alert_message", "")
+    
+    # Handle None values safely
+    current_price_val = current_price if current_price is not None else 0.0
+    target_price_val = target_price if target_price is not None else 0.0
+
+    message = f"""🔔 Price Alert Triggered!
+
+Market: {market_name}
+Market ID: {market_id}
+
+Current Price: ${current_price_val:.4f}
+Threshold: ${target_price_val:.4f}
+Direction: {direction.upper()}
+
+Alert: Price moved {direction} threshold
+{alert_message}
+
+Timestamp: {timestamp}
+
+This is an automated price alert from Polymarket Arbitrage Spotter.
+"""
+
+    return message

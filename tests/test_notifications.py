@@ -367,5 +367,252 @@ class TestGlobalFunctions(unittest.TestCase):
         self.assertIs(service1, service2)
 
 
+class TestSendPriceAlert(unittest.TestCase):
+    """Test send_price_alert function."""
+
+    def setUp(self):
+        """Set up test fixtures."""
+        # Import here to avoid circular imports
+        from app.core.price_alerts import PriceAlert
+        
+        self.PriceAlert = PriceAlert
+
+        # Sample PriceAlert object
+        self.price_alert = PriceAlert(
+            market_id="test_market_123",
+            direction="above",
+            target_price=0.65,
+            current_price=0.70,
+            triggered=True,
+            triggered_at=datetime.now(),
+            alert_message="Price crossed threshold",
+        )
+
+        # Sample alert dictionary
+        self.alert_dict = {
+            "market_id": "test_market_456",
+            "market_name": "Test Market",
+            "direction": "below",
+            "target_price": 0.35,
+            "current_price": 0.30,
+            "triggered_at": datetime.now(),
+            "alert_message": "Price dropped below threshold",
+        }
+
+    @patch("app.core.notifications.get_config")
+    def test_send_price_alert_disabled_notifications(self, mock_get_config):
+        """Test that send_price_alert logs when notifications are disabled."""
+        from app.core.notifications import send_price_alert, _reset_notification_service
+
+        # Mock config with no alert method
+        mock_config = Config(alert_method=None)
+        mock_get_config.return_value = mock_config
+        _reset_notification_service()
+
+        with patch("app.core.notifications.logger") as mock_logger:
+            result = send_price_alert(self.price_alert)
+
+            # Should return False
+            self.assertFalse(result)
+
+            # Should log the alert
+            mock_logger.info.assert_called()
+            call_args = str(mock_logger.info.call_args)
+            self.assertIn("notifications disabled", call_args.lower())
+
+    @patch("app.core.notifications.get_config")
+    @patch("app.core.notifications.requests.post")
+    def test_send_price_alert_with_object_telegram(self, mock_post, mock_get_config):
+        """Test sending price alert with PriceAlert object via Telegram."""
+        from app.core.notifications import send_price_alert, _reset_notification_service
+
+        # Mock config with Telegram
+        mock_config = Config(
+            alert_method="telegram",
+            telegram_api_key="test_key",
+            telegram_chat_id="test_chat_id",
+        )
+        mock_get_config.return_value = mock_config
+        _reset_notification_service()
+
+        # Mock successful response
+        mock_response = MagicMock()
+        mock_response.raise_for_status = MagicMock()
+        mock_post.return_value = mock_response
+
+        result = send_price_alert(self.price_alert)
+
+        # Should return True
+        self.assertTrue(result)
+
+        # Should have called Telegram API
+        mock_post.assert_called_once()
+
+        # Verify message content
+        call_args = mock_post.call_args
+        payload = call_args[1]["json"]
+        message = payload["text"]
+        self.assertIn("test_market_123", message)
+        self.assertIn("0.70", message)
+        self.assertIn("0.65", message)
+        self.assertIn("above", message.lower())
+
+    @patch("app.core.notifications.get_config")
+    @patch("app.core.notifications.requests.post")
+    def test_send_price_alert_with_dict_telegram(self, mock_post, mock_get_config):
+        """Test sending price alert with dictionary via Telegram."""
+        from app.core.notifications import send_price_alert, _reset_notification_service
+
+        # Mock config with Telegram
+        mock_config = Config(
+            alert_method="telegram",
+            telegram_api_key="test_key",
+            telegram_chat_id="test_chat_id",
+        )
+        mock_get_config.return_value = mock_config
+        _reset_notification_service()
+
+        # Mock successful response
+        mock_response = MagicMock()
+        mock_response.raise_for_status = MagicMock()
+        mock_post.return_value = mock_response
+
+        result = send_price_alert(self.alert_dict)
+
+        # Should return True
+        self.assertTrue(result)
+
+        # Should have called Telegram API
+        mock_post.assert_called_once()
+
+        # Verify message content
+        call_args = mock_post.call_args
+        payload = call_args[1]["json"]
+        message = payload["text"]
+        self.assertIn("Test Market", message)
+        self.assertIn("0.30", message)
+        self.assertIn("0.35", message)
+        self.assertIn("below", message.lower())
+
+    @patch("app.core.notifications.get_config")
+    @patch("app.core.notifications.smtplib.SMTP")
+    def test_send_price_alert_email(self, mock_smtp, mock_get_config):
+        """Test sending price alert via email."""
+        from app.core.notifications import send_price_alert, _reset_notification_service
+
+        # Mock config with Email
+        mock_config = Config(
+            alert_method="email",
+            email_smtp_server="smtp.example.com",
+            email_smtp_port=587,
+            email_username="test@example.com",
+            email_password="password",
+            email_from="from@example.com",
+            email_to="to@example.com",
+        )
+        mock_get_config.return_value = mock_config
+        _reset_notification_service()
+
+        # Mock SMTP server
+        mock_server = MagicMock()
+        mock_smtp.return_value.__enter__.return_value = mock_server
+
+        result = send_price_alert(self.price_alert)
+
+        # Should return True
+        self.assertTrue(result)
+
+        # Should have sent email
+        mock_server.send_message.assert_called_once()
+
+    @patch("app.core.notifications.get_config")
+    @patch("app.core.notifications.requests.post")
+    def test_send_price_alert_error_handling(self, mock_post, mock_get_config):
+        """Test that send_price_alert handles errors gracefully."""
+        from app.core.notifications import send_price_alert, _reset_notification_service
+
+        # Mock config with Telegram
+        mock_config = Config(
+            alert_method="telegram",
+            telegram_api_key="test_key",
+            telegram_chat_id="test_chat_id",
+        )
+        mock_get_config.return_value = mock_config
+        _reset_notification_service()
+
+        # Mock exception
+        mock_post.side_effect = Exception("Network error")
+
+        # Should not raise exception
+        result = send_price_alert(self.price_alert)
+
+        # Should return False
+        self.assertFalse(result)
+
+    @patch("app.core.notifications.get_config")
+    def test_send_price_alert_with_malformed_data(self, mock_get_config):
+        """Test send_price_alert with malformed data doesn't crash."""
+        from app.core.notifications import send_price_alert, _reset_notification_service
+
+        # Mock config with Telegram
+        mock_config = Config(
+            alert_method="telegram",
+            telegram_api_key="test_key",
+            telegram_chat_id="test_chat_id",
+        )
+        mock_get_config.return_value = mock_config
+        _reset_notification_service()
+
+        # Malformed alert data (missing keys)
+        malformed_alert = {"market_id": "test"}
+
+        with patch("app.core.notifications.requests.post"):
+            # Should not raise exception
+            result = send_price_alert(malformed_alert)
+            # May return True or False, but should not crash
+            self.assertIsInstance(result, bool)
+
+    def test_format_price_alert_subject(self):
+        """Test price alert subject formatting."""
+        from app.core.notifications import _format_price_alert_subject
+
+        alert_data = {
+            "market_name": "Bitcoin 100K",
+            "direction": "above",
+            "target_price": 0.65,
+            "current_price": 0.70,
+        }
+
+        subject = _format_price_alert_subject(alert_data)
+
+        self.assertIn("Bitcoin 100K", subject)
+        self.assertIn("0.70", subject)
+        self.assertIn("0.65", subject)
+        self.assertIn("above", subject)
+
+    def test_format_price_alert_message(self):
+        """Test price alert message formatting."""
+        from app.core.notifications import _format_price_alert_message
+
+        alert_data = {
+            "market_id": "btc_100k",
+            "market_name": "Bitcoin 100K",
+            "direction": "above",
+            "target_price": 0.65,
+            "current_price": 0.70,
+            "timestamp": "2024-01-01T12:00:00",
+            "alert_message": "Alert triggered",
+        }
+
+        message = _format_price_alert_message(alert_data)
+
+        self.assertIn("Bitcoin 100K", message)
+        self.assertIn("btc_100k", message)
+        self.assertIn("0.70", message)
+        self.assertIn("0.65", message)
+        self.assertIn("ABOVE", message)
+        self.assertIn("2024-01-01T12:00:00", message)
+
+
 if __name__ == "__main__":
     unittest.main()
