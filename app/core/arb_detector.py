@@ -149,11 +149,15 @@ class ArbitrageDetector:
             
             for market in market_data:
                 try:
+                    if market is None:
+                        logger.warning("Skipping None market data")
+                        continue
+                    
                     opp = self._check_two_way_arbitrage(market)
                     if opp:
                         opportunities.append(opp)
                 except Exception as e:
-                    market_id = market.get('id', 'unknown')
+                    market_id = market.get('id', 'unknown') if market else 'unknown'
                     logger.error(f"Error checking arbitrage for market {market_id}: {e}")
                     # Continue processing other markets
             
