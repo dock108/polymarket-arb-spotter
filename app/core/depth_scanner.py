@@ -6,7 +6,38 @@ outcomes, calculating metrics such as total depth, top-of-book gaps, and
 imbalances.
 """
 
+from dataclasses import dataclass
 from typing import Dict, Any, List, Union
+
+
+@dataclass
+class DepthSignal:
+    """
+    Structured signal for orderbook depth analysis.
+
+    Represents alerts triggered by orderbook depth conditions such as
+    thin liquidity, large spreads, or strong imbalances.
+
+    Attributes:
+        signal_type: Type of depth signal ("thin_depth", "large_gap", "strong_imbalance")
+        triggered: Whether the signal condition has been met
+        reason: Human-readable explanation of the signal
+        metrics: Dictionary containing relevant metrics that triggered the signal
+    """
+
+    signal_type: str
+    triggered: bool
+    reason: str
+    metrics: Dict[str, Any]
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert signal to dictionary."""
+        return {
+            "signal_type": self.signal_type,
+            "triggered": self.triggered,
+            "reason": self.reason,
+            "metrics": self.metrics,
+        }
 
 
 def analyze_depth(orderbook: Dict[str, Any]) -> Dict[str, float]:
@@ -207,3 +238,112 @@ def convert_normalized_to_raw(
     asks = [{"price": str(price), "size": str(size)} for price, size in yes_asks]
 
     return {"bids": bids, "asks": asks}
+
+
+def detect_depth_signals(metrics: Dict[str, float]) -> List[DepthSignal]:
+    """
+    Detect depth-related signals from orderbook metrics.
+
+    Analyzes depth metrics and triggers signals based on conditions:
+    - Thin depth: Total depth below threshold indicating low liquidity
+    - Large gaps: Wide bid-ask spread indicating poor market efficiency
+    - Strong imbalance: Significant difference between YES and NO depth
+
+    Args:
+        metrics: Dictionary containing depth metrics from analyze_depth() or
+                analyze_normalized_depth() with keys:
+                - total_yes_depth: Total YES side liquidity
+                - total_no_depth: Total NO side liquidity
+                - top_gap_yes: YES bid-ask spread
+                - top_gap_no: NO bid-ask spread
+                - imbalance: Difference between YES and NO depth
+
+    Returns:
+        List of DepthSignal objects for triggered conditions
+
+    Example:
+        >>> metrics = {
+        ...     "total_yes_depth": 150.0,
+        ...     "total_no_depth": 150.0,
+        ...     "top_gap_yes": 0.15,
+        ...     "top_gap_no": 0.15,
+        ...     "imbalance": 0.0
+        ... }
+        >>> signals = detect_depth_signals(metrics)
+        >>> len(signals)
+        2
+        >>> signals[0].signal_type
+        'thin_depth'
+    """
+    signals = []
+
+    # Thresholds for signal detection
+    THIN_DEPTH_THRESHOLD = 500.0  # Minimum total depth
+    LARGE_GAP_THRESHOLD = 0.10  # Maximum acceptable spread (10%)
+    STRONG_IMBALANCE_THRESHOLD = 300.0  # Maximum acceptable imbalance
+
+    # Extract metrics
+    total_yes_depth = metrics.get("total_yes_depth", 0.0)
+    total_no_depth = metrics.get("total_no_depth", 0.0)
+    top_gap_yes = metrics.get("top_gap_yes", 0.0)
+    top_gap_no = metrics.get("top_gap_no", 0.0)
+    imbalance = metrics.get("imbalance", 0.0)
+
+    # Calculate total depth across both sides
+    total_depth = total_yes_depth + total_no_depth
+
+    # Check for thin depth
+    if total_depth < THIN_DEPTH_THRESHOLD:
+        signals.append(
+            DepthSignal(
+                signal_type="thin_depth",
+                triggered=True,
+                reason=f"Thin orderbook depth: {total_depth:.2f} < {THIN_DEPTH_THRESHOLD:.2f}",
+                metrics={
+                    "total_depth": total_depth,
+                    "threshold": THIN_DEPTH_THRESHOLD,
+                    "total_yes_depth": total_yes_depth,
+                    "total_no_depth": total_no_depth,
+                },
+            )
+        )
+
+    # Check for large gaps
+    max_gap = max(top_gap_yes, top_gap_no)
+    if max_gap > LARGE_GAP_THRESHOLD:
+        signals.append(
+            DepthSignal(
+                signal_type="large_gap",
+                triggered=True,
+                reason=f"Large bid-ask gap: {max_gap:.4f} > {LARGE_GAP_THRESHOLD:.4f}",
+                metrics={
+                    "max_gap": max_gap,
+                    "threshold": LARGE_GAP_THRESHOLD,
+                    "top_gap_yes": top_gap_yes,
+                    "top_gap_no": top_gap_no,
+                },
+            )
+        )
+
+    # Check for strong imbalance
+    abs_imbalance = abs(imbalance)
+    if abs_imbalance > STRONG_IMBALANCE_THRESHOLD:
+        # Determine which side has more depth
+        deeper_side = "YES" if imbalance > 0 else "NO"
+        signals.append(
+            DepthSignal(
+                signal_type="strong_imbalance",
+                triggered=True,
+                reason=f"Strong depth imbalance: {abs_imbalance:.2f} > {STRONG_IMBALANCE_THRESHOLD:.2f} (favors {deeper_side})",
+                metrics={
+                    "imbalance": imbalance,
+                    "abs_imbalance": abs_imbalance,
+                    "threshold": STRONG_IMBALANCE_THRESHOLD,
+                    "deeper_side": deeper_side,
+                    "total_yes_depth": total_yes_depth,
+                    "total_no_depth": total_no_depth,
+                },
+            )
+        )
+
+    return signals
