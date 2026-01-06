@@ -27,23 +27,21 @@ def render_history_view():
     st.title("📜 Opportunity History")
     st.markdown("---")
 
-    # Filters
+    # Filters (displayed but not currently functional - placeholder for future)
     col1, col2, col3 = st.columns(3)
 
     with col1:
-        date_range = st.selectbox(
+        _ = st.selectbox(
             "Time Range", ["Last 24 Hours", "Last 7 Days", "Last 30 Days", "All Time"]
         )
 
     with col2:
-        opportunity_type = st.selectbox(
+        _ = st.selectbox(
             "Opportunity Type", ["All Types", "Two-Way", "Triangular", "Cross-Market"]
         )
 
     with col3:
-        min_profit = st.number_input(
-            "Min Profit ($)", min_value=0.0, value=0.0, step=1.0
-        )
+        _ = st.number_input("Min Profit ($)", min_value=0.0, value=0.0, step=1.0)
 
     st.markdown("---")
 

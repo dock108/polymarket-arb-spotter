@@ -439,7 +439,7 @@ class TestLoadSaveAlerts(unittest.TestCase):
     def test_load_corrupted_file(self):
         """Test loading corrupted JSON file."""
         os.makedirs(os.path.dirname(self.storage_path), exist_ok=True)
-        with open(self.storage_path, 'w') as f:
+        with open(self.storage_path, "w") as f:
             f.write("invalid json {{{")
 
         loaded_alerts = _load_alerts(self.storage_path)
@@ -463,10 +463,7 @@ class TestAddAlert(unittest.TestCase):
     def test_add_alert_basic(self):
         """Test adding a basic alert."""
         alert_id = add_alert(
-            "market_123",
-            "above",
-            0.75,
-            storage_path=self.storage_path
+            "market_123", "above", 0.75, storage_path=self.storage_path
         )
 
         self.assertIsNotNone(alert_id)
@@ -488,7 +485,7 @@ class TestAddAlert(unittest.TestCase):
             "below",
             0.30,
             alert_id="custom_id_123",
-            storage_path=self.storage_path
+            storage_path=self.storage_path,
         )
 
         self.assertEqual(alert_id, "custom_id_123")
@@ -515,7 +512,7 @@ class TestAddAlert(unittest.TestCase):
             "above",
             0.50,
             alert_id="duplicate_id",
-            storage_path=self.storage_path
+            storage_path=self.storage_path,
         )
 
         with self.assertRaises(ValueError) as context:
@@ -524,7 +521,7 @@ class TestAddAlert(unittest.TestCase):
                 "below",
                 0.30,
                 alert_id="duplicate_id",
-                storage_path=self.storage_path
+                storage_path=self.storage_path,
             )
         self.assertIn("already exists", str(context.exception))
 
@@ -565,10 +562,7 @@ class TestRemoveAlert(unittest.TestCase):
     def test_remove_alert_success(self):
         """Test removing an existing alert."""
         alert_id = add_alert(
-            "market_123",
-            "above",
-            0.75,
-            storage_path=self.storage_path
+            "market_123", "above", 0.75, storage_path=self.storage_path
         )
 
         # Verify it exists
@@ -652,21 +646,15 @@ class TestListAlerts(unittest.TestCase):
         """Test that alerts are sorted by creation time (newest first)."""
         # Add alerts with slight delays
         add_alert(
-            "market_1", "above", 0.60,
-            alert_id="id1",
-            storage_path=self.storage_path
+            "market_1", "above", 0.60, alert_id="id1", storage_path=self.storage_path
         )
         time.sleep(0.01)
         add_alert(
-            "market_2", "below", 0.40,
-            alert_id="id2",
-            storage_path=self.storage_path
+            "market_2", "below", 0.40, alert_id="id2", storage_path=self.storage_path
         )
         time.sleep(0.01)
         add_alert(
-            "market_3", "above", 0.80,
-            alert_id="id3",
-            storage_path=self.storage_path
+            "market_3", "above", 0.80, alert_id="id3", storage_path=self.storage_path
         )
 
         alerts = list_alerts(storage_path=self.storage_path)

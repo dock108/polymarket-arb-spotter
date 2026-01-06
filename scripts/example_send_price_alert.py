@@ -141,7 +141,8 @@ def main():
     print("\n" + "=" * 60)
     print("Integration Example")
     print("-" * 60)
-    print("""
+    print(
+        """
 from app.core.notifications import send_price_alert
 from app.core.price_alerts import PriceAlertWatcher
 
@@ -157,7 +158,8 @@ watcher = PriceAlertWatcher(
     on_alert_triggered=handle_alert
 )
 watcher.start()
-""")
+"""
+    )
     print("=" * 60)
 
 

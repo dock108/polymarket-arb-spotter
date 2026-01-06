@@ -394,10 +394,14 @@ def send_price_alert(alert: Any) -> bool:
         if not service.config.alert_method:
             # Log instead of sending notification
             # Handle None values gracefully
-            current_price_str = f"{current_price:.4f}" if current_price is not None else "N/A"
-            target_price_str = f"{target_price:.4f}" if target_price is not None else "N/A"
+            current_price_str = (
+                f"{current_price:.4f}" if current_price is not None else "N/A"
+            )
+            target_price_str = (
+                f"{target_price:.4f}" if target_price is not None else "N/A"
+            )
             triggered_at_str = str(triggered_at) if triggered_at else "N/A"
-            
+
             logger.info(
                 f"Price alert triggered (notifications disabled): "
                 f"{market_name} - Price {current_price_str} {direction} "
@@ -406,7 +410,9 @@ def send_price_alert(alert: Any) -> bool:
             return False
 
         # Format timestamp
-        timestamp_str = triggered_at.isoformat() if triggered_at else datetime.now().isoformat()
+        timestamp_str = (
+            triggered_at.isoformat() if triggered_at else datetime.now().isoformat()
+        )
 
         # Build notification payload
         notification_data = {
@@ -432,7 +438,9 @@ def send_price_alert(alert: Any) -> bool:
 
         if success:
             # Safe formatting for logging
-            target_price_str = f"{target_price:.4f}" if target_price is not None else "N/A"
+            target_price_str = (
+                f"{target_price:.4f}" if target_price is not None else "N/A"
+            )
             logger.info(
                 f"Price alert sent successfully via {service.config.alert_method}: "
                 f"{market_name} - {direction} {target_price_str}"
@@ -465,7 +473,7 @@ def _format_price_alert_subject(alert_data: Dict[str, Any]) -> str:
     direction = alert_data.get("direction", "unknown")
     target_price = alert_data.get("target_price")
     current_price = alert_data.get("current_price")
-    
+
     # Handle None values safely
     target_price_val = target_price if target_price is not None else 0.0
     current_price_val = current_price if current_price is not None else 0.0
@@ -493,7 +501,7 @@ def _format_price_alert_message(alert_data: Dict[str, Any]) -> str:
     direction = alert_data.get("direction", "unknown")
     timestamp = alert_data.get("timestamp", datetime.now().isoformat())
     alert_message = alert_data.get("alert_message", "")
-    
+
     # Handle None values safely
     current_price_val = current_price if current_price is not None else 0.0
     target_price_val = target_price if target_price is not None else 0.0

@@ -453,8 +453,8 @@ class ArbitrageDetector:
 
             cursor.execute(
                 """
-                SELECT * FROM opportunities 
-                ORDER BY detected_at DESC 
+                SELECT * FROM opportunities
+                ORDER BY detected_at DESC
                 LIMIT ?
             """,
                 (limit,),

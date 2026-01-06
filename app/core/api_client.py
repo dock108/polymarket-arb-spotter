@@ -471,16 +471,16 @@ class PolymarketAPIClient:
                 # Parse message type and extract relevant data
                 # Expected format: {"type": "...", "market": "...", "data": {...}}
                 msg_type = message.get("type")
-                
+
                 if msg_type == "book":
                     # Order book update
                     market_id = message.get("market", message.get("asset_id", ""))
                     book_data = message.get("data", message)
-                    
+
                     # Normalize the orderbook
                     normalized = self._normalize_orderbook(book_data, market_id)
                     on_price_update(market_id, normalized)
-                    
+
             except Exception as e:
                 logger.error(f"Error processing WebSocket message: {e}")
                 if on_error:
