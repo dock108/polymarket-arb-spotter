@@ -39,6 +39,10 @@ from app.core.price_alerts import (
 from app.core.notifications import send_price_alert
 from app.core.logger import logger, init_db, log_price_alert_event
 from app.core.config import get_config
+from app.core.history_recorder import (
+    HistoryRecorder,
+    record_market_tick,
+)
 
 
 class PriceAlertRunner:
@@ -69,6 +73,9 @@ class PriceAlertRunner:
         self.max_retries = 5
         self.base_backoff = 2.0  # Base backoff time in seconds
         self.config = get_config()
+
+        # History recorder for non-blocking tick recording
+        self.history_recorder: Optional[HistoryRecorder] = None
 
         # Setup signal handlers for graceful shutdown
         signal.signal(signal.SIGINT, self._signal_handler)
@@ -106,6 +113,19 @@ class PriceAlertRunner:
                 f"{alert.direction} {alert.target_price:.4f} - "
                 f"Current: {alert.current_price:.4f}"
             )
+
+            # Record market tick to history (non-blocking)
+            # Note: For binary markets, the yes/no prices should sum to ~1.0.
+            # Price alerts monitor a single outcome, so we estimate the complementary
+            # price. This is an approximation - actual no_price may differ slightly
+            # due to market spread or fees.
+            if alert.current_price is not None:
+                record_market_tick(
+                    market_id=alert.market_id,
+                    yes_price=alert.current_price,
+                    no_price=1.0 - alert.current_price,
+                    volume=0.0,
+                )
 
             # Send notification (handles errors gracefully)
             success = send_price_alert(alert)
@@ -269,6 +289,11 @@ class PriceAlertRunner:
         logger.info(
             f"Notification cooldown: {self.config.notification_throttle_seconds}s"
         )
+        logger.info(
+            f"History recording: {'Enabled' if self.config.enable_history else 'Disabled'}"
+        )
+        if self.config.enable_history:
+            logger.info(f"History sampling: {self.config.history_sampling_ms}ms")
         logger.info("=" * 70)
         logger.info("")
 
@@ -276,6 +301,10 @@ class PriceAlertRunner:
         logger.info("Initializing database...")
         init_db()
         logger.info("✓ Database initialized")
+
+        # Initialize history recorder
+        self.history_recorder = HistoryRecorder()
+        self.history_recorder.start()
 
         # Main retry loop
         while self.retry_count < self.max_retries:
@@ -353,6 +382,12 @@ class PriceAlertRunner:
                 logger.info("✓ Watcher stopped")
             except Exception as e:
                 logger.error(f"Error stopping watcher: {e}")
+
+        if self.history_recorder:
+            try:
+                self.history_recorder.stop()
+            except Exception as e:
+                logger.error(f"Error stopping history recorder: {e}")
 
 
 def parse_args():
