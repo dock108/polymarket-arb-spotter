@@ -330,7 +330,9 @@ def prune_old(
         if count > 0:
             # Delete old ticks using table method
             db["market_ticks"].delete_where("timestamp < ?", [cutoff_str])
-            # Explicitly commit to ensure persistence
+            # Explicit commit is required for sqlite-utils when using
+            # separate Database objects across function calls (each call
+            # to _get_db creates a new connection)
             db.conn.commit()
             logger.info(f"Pruned {count} ticks older than {days} days")
 

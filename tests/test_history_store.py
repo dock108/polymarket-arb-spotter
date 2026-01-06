@@ -410,10 +410,13 @@ class TestGetTicks(TestHistoryStore):
 
     def test_get_ticks_limit(self):
         """Test that limit parameter is respected."""
+        from datetime import datetime, timedelta
+        
+        base_time = datetime(2024, 1, 5, 10, 0, 0)
         for i in range(20):
             append_tick(
                 market_id="market_limit",
-                timestamp=f"2024-01-05T{10+i:02d}:00:00",
+                timestamp=(base_time + timedelta(minutes=i)).isoformat(),
                 yes_price=0.50,
                 no_price=0.50,
                 volume=100.0,
