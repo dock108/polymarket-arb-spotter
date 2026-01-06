@@ -94,6 +94,8 @@ class LiveObserver:
         # Initialize components
         self.api_client = PolymarketAPIClient()
         self.detector = ArbitrageDetector(db_path=self.config.db_path)
+        # MockTradeExecutor uses default parameters intentionally for realistic simulation
+        # (fee_rate=0.02, price_volatility=0.02, depth_variability=0.5)
         self.mock_executor = MockTradeExecutor() if enable_mock_trades else None
 
         # Initialize database for event logging
@@ -227,9 +229,13 @@ class LiveObserver:
             if self.duration:
                 end_time = datetime.now() + timedelta(seconds=self.duration)
 
+            def handle_ws_error(e):
+                """Handle WebSocket error with full traceback."""
+                logger.error(f"WebSocket error: {e}", exc_info=True)
+
             for update in self.api_client.websocket_stream_prices(
                 market_ids=market_ids[:50],  # Limit to 50 for WebSocket
-                on_error=lambda e: logger.error(f"WebSocket error: {e}"),
+                on_error=handle_ws_error,
             ):
                 if self._shutdown_requested:
                     break
@@ -295,7 +301,7 @@ class LiveObserver:
         logger.info(f"Sum of Prices: ${alert.metrics['sum_price']:.4f}")
         logger.info(f"Threshold: ${alert.metrics.get('threshold', 'N/A')}")
 
-        prices = alert.metrics.get("prices", {})
+        prices = alert.metrics.get("prices", {}) or {}  # Handle None case
         logger.info(f"Yes Price: ${prices.get('yes_price', 0):.4f}")
         logger.info(f"No Price: ${prices.get('no_price', 0):.4f}")
 
@@ -347,8 +353,10 @@ class LiveObserver:
                     detected_at=datetime.now(),
                 )
 
-                # Execute mock trade
-                execution = self.mock_executor.execute_trade(opportunity, trade_amount=100.0)
+                # Execute mock trade with configurable trade amount (default $100)
+                # This simulates a small trade to estimate execution feasibility
+                trade_amount = self.config.max_stake if hasattr(self.config, 'max_stake') else 100.0
+                execution = self.mock_executor.execute_trade(opportunity, trade_amount=trade_amount)
 
                 self.stats["mock_trades_executed"] += 1
                 if execution.success:
