@@ -544,7 +544,7 @@ class TestReplayEngineIntegration(TestHistoricalReplayEngine):
         # Verify prices are complementary
         for yes_price, no_price in zip(consumer1_data, consumer2_data):
             # Should be approximately complementary (sum close to 1.0)
-            self.assertAlmostEqual(yes_price + no_price, 1.0, delta=0.1)
+            self.assertAlmostEqual(yes_price + no_price, 1.0, delta=0.02)
 
 
 if __name__ == "__main__":

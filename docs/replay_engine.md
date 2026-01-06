@@ -402,7 +402,7 @@ All 35 tests should pass, covering:
 
 ## See Also
 
-- [History Store Documentation](../app/core/history_store.py) - Data storage backend
-- [History Recorder Documentation](../app/core/history_recorder.py) - Data collection
-- [Arbitrage Detector](../app/core/arb_detector.py) - Detection algorithm
-- [Simulator](../app/core/simulator.py) - Mock data generation for testing
+- History Store (source: `app/core/history_store.py`) - Data storage backend
+- History Recorder (source: `app/core/history_recorder.py`) - Data collection
+- Arbitrage Detector (source: `app/core/arb_detector.py`) - Detection algorithm
+- Simulator (source: `app/core/simulator.py`) - Mock data generation for testing
