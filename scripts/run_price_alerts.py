@@ -22,6 +22,7 @@ import sys
 import time
 import signal
 import argparse
+import hashlib
 from pathlib import Path
 from datetime import datetime
 from typing import Optional
@@ -47,6 +48,9 @@ class PriceAlertRunner:
     Manages the lifecycle of the watcher, including initialization,
     monitoring, retry logic, heartbeat, and graceful shutdown.
     """
+    
+    # Class constants
+    MAX_BACKOFF_SECONDS = 300.0  # 5 minutes maximum backoff
     
     def __init__(self, log_level: str = "INFO"):
         """
@@ -113,13 +117,17 @@ class PriceAlertRunner:
             
             # Log the alert event to database
             try:
+                # Create unique alert ID using hash to avoid issues with special characters
+                alert_id_str = f"{alert.market_id}|{alert.direction}|{alert.target_price}"
+                alert_id_hash = hashlib.sha256(alert_id_str.encode()).hexdigest()[:16]
+                
                 alert_event = {
                     "timestamp": alert.triggered_at or datetime.now(),
-                    "alert_id": f"{alert.market_id}_{alert.direction}_{alert.target_price}",
+                    "alert_id": alert_id_hash,
                     "market_id": alert.market_id,
                     "direction": alert.direction,
                     "target_price": alert.target_price,
-                    "trigger_price": alert.current_price or 0.0,
+                    "trigger_price": alert.current_price if alert.current_price is not None else float('nan'),
                     "mode": "live",
                     "latency_ms": 0,  # Could be calculated if needed
                 }
@@ -227,8 +235,8 @@ class PriceAlertRunner:
             Backoff time in seconds
         """
         # Exponential backoff: base * (2 ^ retry_count)
-        # Capped at 5 minutes (300 seconds)
-        backoff = min(self.base_backoff * (2 ** self.retry_count), 300.0)
+        # Capped at MAX_BACKOFF_SECONDS (5 minutes)
+        backoff = min(self.base_backoff * (2 ** self.retry_count), self.MAX_BACKOFF_SECONDS)
         return backoff
     
     def start(self) -> None:
