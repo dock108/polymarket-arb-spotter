@@ -29,7 +29,7 @@ def analyze_depth(orderbook: Dict[str, Any]) -> Dict[str, float]:
         Dictionary containing depth metrics:
             - total_yes_depth: Total volume available across all YES bids and asks
             - total_no_depth: Total volume available across all NO bids and asks
-                             (derived from YES order book for binary markets)
+                             (equals total_yes_depth for binary markets since buying YES = selling NO)
             - top_gap_yes: Spread between best YES bid and ask prices
             - top_gap_no: Spread between best NO bid and ask prices
             - imbalance: Difference between YES and NO depth (total_yes_depth - total_no_depth)
@@ -80,15 +80,9 @@ def analyze_depth(orderbook: Dict[str, Any]) -> Dict[str, float]:
         # YES gap = ask - bid
         top_gap_yes = yes_best_ask - yes_best_bid
 
-        # NO prices are derived: no_price = 1 - yes_price
-        # no_best_bid = 1 - yes_best_ask
-        # no_best_ask = 1 - yes_best_bid
-        no_best_bid = 1.0 - yes_best_ask
-        no_best_ask = 1.0 - yes_best_bid
-
-        # NO gap = no_ask - no_bid = (1 - yes_best_bid) - (1 - yes_best_ask)
-        #        = yes_best_ask - yes_best_bid = same as YES gap
-        top_gap_no = no_best_ask - no_best_bid
+        # For binary markets, NO gap equals YES gap
+        # (because no_gap = (1 - yes_best_bid) - (1 - yes_best_ask) = yes_best_ask - yes_best_bid)
+        top_gap_no = top_gap_yes
 
         metrics["top_gap_yes"] = top_gap_yes
         metrics["top_gap_no"] = top_gap_no
