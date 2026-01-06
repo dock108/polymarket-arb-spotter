@@ -18,6 +18,7 @@ from app.core.logger import fetch_recent, logger
 from app.core.mock_data import MockDataGenerator
 from app.ui.depth_view import render_depth_view
 from app.ui.history_view import render_history_view
+from app.ui.patterns_view import render_patterns_view
 from app.ui.price_alerts_view import render_price_alerts_view
 from app.ui.replay_view import render_replay_view
 from app.ui.settings_view import render_settings_view
@@ -39,7 +40,7 @@ def render_dashboard():
     # Sidebar navigation
     st.sidebar.title("📊 Navigation")
     page = st.sidebar.radio(
-        "Go to", ["Dashboard", "History", "Replay & Label", "Depth Monitor", "Price Alerts", "Settings"]
+        "Go to", ["Dashboard", "Pattern Insights", "History", "Replay & Label", "Depth Monitor", "Price Alerts", "Settings"]
     )
 
     # Mode toggle in sidebar
@@ -57,6 +58,8 @@ def render_dashboard():
     # Render appropriate page
     if page == "Dashboard":
         render_dashboard_content()
+    elif page == "Pattern Insights":
+        render_patterns_view()
     elif page == "History":
         render_history_view()
     elif page == "Replay & Label":
