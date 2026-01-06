@@ -149,7 +149,7 @@ def render_patterns_view():
                     fill_value=0
                 )
                 
-                st.dataframe(heatmap_pivot.style.background_gradient(cmap='RdYlGn'), use_container_width=True)
+                st.dataframe(heatmap_pivot, use_container_width=True)
             else:
                 st.info("No signal type data available from depth events.")
         else:
@@ -171,7 +171,7 @@ def render_patterns_view():
                 fill_value=0
             )
             
-            st.dataframe(heatmap_pivot.style.background_gradient(cmap='RdYlGn'), use_container_width=True)
+            st.dataframe(heatmap_pivot, use_container_width=True)
         else:
             st.info("Insufficient data for signal type heatmap.")
     
