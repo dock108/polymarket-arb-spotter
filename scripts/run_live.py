@@ -170,7 +170,9 @@ class LiveObserver:
                 break
 
             logger.info(f"\n{'='*70}")
-            logger.info(f"Iteration {iteration} - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+            logger.info(
+                f"Iteration {iteration} - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+            )
             logger.info(f"{'='*70}")
 
             # Fetch markets from API
@@ -214,7 +216,11 @@ class LiveObserver:
             market_ids = []
             for market in markets:
                 # Try different possible ID fields
-                market_id = market.get("condition_id") or market.get("token_id") or market.get("id")
+                market_id = (
+                    market.get("condition_id")
+                    or market.get("token_id")
+                    or market.get("id")
+                )
                 if market_id:
                     market_ids.append(market_id)
 
@@ -276,7 +282,9 @@ class LiveObserver:
                     self._handle_opportunity(market, alert)
 
             except Exception as e:
-                logger.error(f"Error processing market {market.get('id', 'unknown')}: {e}")
+                logger.error(
+                    f"Error processing market {market.get('id', 'unknown')}: {e}"
+                )
 
     def _handle_opportunity(self, market: Dict[str, Any], alert):
         """
@@ -355,8 +363,14 @@ class LiveObserver:
 
                 # Execute mock trade with configurable trade amount (default $100)
                 # This simulates a small trade to estimate execution feasibility
-                trade_amount = self.config.max_stake if hasattr(self.config, 'max_stake') else 100.0
-                execution = self.mock_executor.execute_trade(opportunity, trade_amount=trade_amount)
+                trade_amount = (
+                    self.config.max_stake
+                    if hasattr(self.config, "max_stake")
+                    else 100.0
+                )
+                execution = self.mock_executor.execute_trade(
+                    opportunity, trade_amount=trade_amount
+                )
 
                 self.stats["mock_trades_executed"] += 1
                 if execution.success:
@@ -453,7 +467,9 @@ class LiveObserver:
             print(f"Mock Trades Successful: {self.stats['mock_trades_successful']}")
             if self.stats["mock_trades_executed"] > 0:
                 success_rate = (
-                    self.stats["mock_trades_successful"] / self.stats["mock_trades_executed"] * 100
+                    self.stats["mock_trades_successful"]
+                    / self.stats["mock_trades_executed"]
+                    * 100
                 )
                 print(f"Success Rate:           {success_rate:.1f}%")
 
@@ -485,7 +501,9 @@ class LiveObserver:
             print(f"  Successful:           {self.stats['mock_trades_successful']}")
             if self.stats["mock_trades_executed"] > 0:
                 success_rate = (
-                    self.stats["mock_trades_successful"] / self.stats["mock_trades_executed"] * 100
+                    self.stats["mock_trades_successful"]
+                    / self.stats["mock_trades_executed"]
+                    * 100
                 )
                 print(f"  Success Rate:         {success_rate:.1f}%")
 
