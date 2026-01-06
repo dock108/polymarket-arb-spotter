@@ -13,12 +13,16 @@ import logging
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
-from typing import Dict, Any, Optional
+from typing import TYPE_CHECKING, Dict, Any, Optional, Union
 from datetime import datetime
 
 import requests
 
 from app.core.config import get_config
+
+# Type checking imports (avoid circular imports at runtime)
+if TYPE_CHECKING:
+    from app.core.depth_scanner import DepthSignal
 
 # Setup logging
 logger = logging.getLogger(__name__)
@@ -526,7 +530,7 @@ This is an automated price alert from Polymarket Arbitrage Spotter.
     return message
 
 
-def send_depth_alert(signal: Any) -> bool:
+def send_depth_alert(signal: Union["DepthSignal", Dict[str, Any]]) -> bool:
     """
     Send a depth alert notification using the global notification service.
 
