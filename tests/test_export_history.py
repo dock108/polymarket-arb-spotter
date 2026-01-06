@@ -15,13 +15,12 @@ import unittest
 from datetime import datetime
 from pathlib import Path
 
-from app.core.history_store import append_ticks
+from app.core.history_store import append_ticks, get_market_ids
 
-# Import from scripts - must happen after sys.path modification
+# Add scripts directory to path for importing export_history
 sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
 
 from export_history import (  # noqa: E402
-    get_all_market_ids,
     get_filtered_ticks,
     export_to_csv,
     export_to_jsonl,
@@ -95,24 +94,24 @@ class TestExportHistory(unittest.TestCase):
         append_ticks(ticks_data, db_path=self.test_db_path)
 
 
-class TestGetAllMarketIds(TestExportHistory):
-    """Test get_all_market_ids function."""
+class TestGetMarketIds(TestExportHistory):
+    """Test get_market_ids function from history_store."""
 
     def test_empty_database(self):
         """Test getting market IDs from empty database."""
-        market_ids = get_all_market_ids(db_path=self.test_db_path)
+        market_ids = get_market_ids(db_path=self.test_db_path)
         self.assertEqual(market_ids, [])
 
     def test_returns_unique_market_ids(self):
         """Test that it returns all unique market IDs."""
         self._create_test_data()
-        market_ids = get_all_market_ids(db_path=self.test_db_path)
+        market_ids = get_market_ids(db_path=self.test_db_path)
         self.assertEqual(sorted(market_ids), ["market_a", "market_b", "market_c"])
 
     def test_market_ids_are_sorted(self):
         """Test that market IDs are returned in sorted order."""
         self._create_test_data()
-        market_ids = get_all_market_ids(db_path=self.test_db_path)
+        market_ids = get_market_ids(db_path=self.test_db_path)
         self.assertEqual(market_ids, sorted(market_ids))
 
 

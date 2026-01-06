@@ -44,33 +44,12 @@ from typing import Any, Dict, List, Optional, Union
 # Add parent directory to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from app.core.history_store import get_ticks, _get_db  # noqa: E402
+from app.core.history_store import get_ticks, get_market_ids  # noqa: E402
 from app.core.logger import logger  # noqa: E402
 
 
-def get_all_market_ids(db_path: str = "data/market_history.db") -> List[str]:
-    """
-    Get all unique market IDs from the history store.
-
-    Args:
-        db_path: Path to the SQLite database file
-
-    Returns:
-        List of unique market IDs
-    """
-    try:
-        db = _get_db(db_path)
-        if "market_ticks" not in db.table_names():
-            return []
-
-        result = db.execute(
-            "SELECT DISTINCT market_id FROM market_ticks ORDER BY market_id"
-        ).fetchall()
-        return [row[0] for row in result]
-
-    except Exception as e:
-        logger.error(f"Error getting market IDs: {e}", exc_info=True)
-        return []
+# Maximum number of ticks to retrieve per market (can be very large for export)
+MAX_TICKS_PER_MARKET = 10000000
 
 
 def get_filtered_ticks(
@@ -93,7 +72,7 @@ def get_filtered_ticks(
     """
     # Get market IDs to query
     if market_ids is None:
-        market_ids = get_all_market_ids(db_path)
+        market_ids = get_market_ids(db_path)
 
     if not market_ids:
         return []
@@ -105,13 +84,14 @@ def get_filtered_ticks(
             market_id=market_id,
             start=start,
             end=end,
-            limit=1000000,  # Large limit to get all ticks
+            limit=MAX_TICKS_PER_MARKET,
             db_path=db_path,
         )
         all_ticks.extend(ticks)
 
-    # Sort by timestamp
-    all_ticks.sort(key=lambda x: x.get("timestamp", ""))
+    # Sort by timestamp (filter out any records with missing timestamps)
+    all_ticks = [t for t in all_ticks if t.get("timestamp")]
+    all_ticks.sort(key=lambda x: x["timestamp"])
 
     return all_ticks
 

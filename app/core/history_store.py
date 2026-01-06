@@ -375,3 +375,31 @@ def get_tick_count(
     except Exception as e:
         logger.error(f"Error getting tick count: {e}", exc_info=True)
         return 0
+
+
+def get_market_ids(
+    db_path: str = _HISTORY_DB_PATH,
+) -> List[str]:
+    """
+    Get all unique market IDs from the history store.
+
+    Args:
+        db_path: Path to the SQLite database file
+
+    Returns:
+        List of unique market IDs in sorted order
+    """
+    try:
+        db = _get_db(db_path)
+
+        if "market_ticks" not in db.table_names():
+            return []
+
+        result = db.execute(
+            "SELECT DISTINCT market_id FROM market_ticks ORDER BY market_id"
+        ).fetchall()
+        return [row[0] for row in result]
+
+    except Exception as e:
+        logger.error(f"Error getting market IDs: {e}", exc_info=True)
+        return []

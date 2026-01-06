@@ -17,6 +17,7 @@ from app.core.history_store import (
     get_ticks,
     prune_old,
     get_tick_count,
+    get_market_ids,
     _get_db,
     _ensure_table,
 )
@@ -631,6 +632,76 @@ class TestTableCreation(TestHistoryStore):
         ).fetchall()
         index_names = [idx[0] for idx in indexes]
         self.assertIn("idx_market_timestamp", index_names)
+
+
+class TestGetMarketIds(TestHistoryStore):
+    """Test get_market_ids function."""
+
+    def test_empty_database(self):
+        """Test getting market IDs from empty database."""
+        market_ids = get_market_ids(db_path=self.test_db_path)
+        self.assertEqual(market_ids, [])
+
+    def test_returns_unique_market_ids(self):
+        """Test that it returns all unique market IDs."""
+        # Insert ticks for multiple markets
+        append_tick(
+            market_id="market_a",
+            timestamp="2024-01-05T10:00:00",
+            yes_price=0.60,
+            no_price=0.40,
+            volume=100.0,
+            db_path=self.test_db_path,
+        )
+        append_tick(
+            market_id="market_b",
+            timestamp="2024-01-05T10:00:00",
+            yes_price=0.70,
+            no_price=0.30,
+            volume=100.0,
+            db_path=self.test_db_path,
+        )
+        append_tick(
+            market_id="market_a",
+            timestamp="2024-01-05T11:00:00",
+            yes_price=0.61,
+            no_price=0.39,
+            volume=100.0,
+            db_path=self.test_db_path,
+        )
+
+        market_ids = get_market_ids(db_path=self.test_db_path)
+        self.assertEqual(market_ids, ["market_a", "market_b"])
+
+    def test_market_ids_are_sorted(self):
+        """Test that market IDs are returned in sorted order."""
+        append_tick(
+            market_id="zebra",
+            timestamp="2024-01-05T10:00:00",
+            yes_price=0.50,
+            no_price=0.50,
+            volume=100.0,
+            db_path=self.test_db_path,
+        )
+        append_tick(
+            market_id="alpha",
+            timestamp="2024-01-05T10:00:00",
+            yes_price=0.50,
+            no_price=0.50,
+            volume=100.0,
+            db_path=self.test_db_path,
+        )
+        append_tick(
+            market_id="middle",
+            timestamp="2024-01-05T10:00:00",
+            yes_price=0.50,
+            no_price=0.50,
+            volume=100.0,
+            db_path=self.test_db_path,
+        )
+
+        market_ids = get_market_ids(db_path=self.test_db_path)
+        self.assertEqual(market_ids, ["alpha", "middle", "zebra"])
 
 
 class TestOfflineSafety(TestHistoryStore):
