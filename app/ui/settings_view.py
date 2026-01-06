@@ -1,11 +1,9 @@
 """
 Settings view for configuring the arbitrage spotter.
 
-TODO: Implement configuration persistence
-TODO: Add API key management
-TODO: Add notification settings
-TODO: Add detection parameter tuning
-TODO: Implement theme customization
+Note: This is a placeholder UI. Full settings persistence will be
+implemented in a future version. Currently displays configuration
+values from .env file but changes are not saved.
 """
 
 from datetime import datetime
@@ -21,9 +19,8 @@ def render_settings_view():
     """
     Render the settings page.
 
-    TODO: Add validation for all settings
-    TODO: Implement save/load configuration
-    TODO: Add reset to defaults option
+    Currently displays configuration values but does not persist changes.
+    Settings must be modified in .env file and application restarted.
     """
     st.title("⚙️ Settings")
     st.markdown("---")
@@ -159,15 +156,13 @@ def render_settings_view():
 
     with col1:
         if st.button("💾 Save Settings", type="primary"):
-            # TODO: Implement save logic
-            st.success("Settings saved successfully!")
-            logger.info("Settings saved")
+            st.warning("⚠️ Settings persistence not yet implemented. Please update .env file manually.")
+            logger.info("Settings save attempted (not implemented)")
 
     with col2:
         if st.button("🔄 Reset to Defaults"):
-            # TODO: Implement reset logic
-            st.warning("Settings reset to defaults")
-            logger.info("Settings reset to defaults")
+            st.info("ℹ️ Reset not yet implemented. Current values are from .env file.")
+            logger.info("Settings reset attempted (not implemented)")
 
     st.markdown("---")
 
@@ -201,9 +196,9 @@ def validate_settings(settings: Dict[str, Any]) -> bool:
     Returns:
         True if valid, False otherwise
 
-    TODO: Implement comprehensive validation
+    Note: Placeholder for future implementation when persistence is added.
     """
-    # TODO: Add validation logic
+    # Placeholder - validation will be implemented with persistence
     return True
 
 

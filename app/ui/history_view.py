@@ -1,11 +1,9 @@
 """
 History view for viewing past arbitrage opportunities.
 
-TODO: Implement date range filtering
-TODO: Add export functionality (CSV, JSON)
-TODO: Add detailed analytics and charts
-TODO: Implement search and filtering
-TODO: Add performance metrics over time
+Displays recent arbitrage opportunities from the database with basic
+filtering and export functionality. Additional analytics features
+are planned for future releases.
 """
 
 from datetime import datetime
@@ -22,9 +20,9 @@ def render_history_view():
     """
     Render the history view page.
 
-    TODO: Add pagination for large datasets
-    TODO: Implement sorting options
-    TODO: Add profit/loss tracking if executed
+    Shows detected arbitrage opportunities with basic filtering.
+    Advanced features like time-series charts and detailed analytics
+    are planned for future releases.
     """
     st.title("📜 Opportunity History")
     st.markdown("---")
@@ -103,13 +101,11 @@ def render_history_view():
 
     with chart_col1:
         st.markdown("**Opportunities Over Time**")
-        # TODO: Implement time series chart
-        st.info("Chart coming soon")
+        st.info("📊 Time series chart - planned for future release")
 
     with chart_col2:
         st.markdown("**Profit Distribution**")
-        # TODO: Implement profit distribution chart
-        st.info("Chart coming soon")
+        st.info("📊 Profit distribution chart - planned for future release")
 
 
 def show_opportunity_detail_modal(opportunity: Dict[str, Any]):
@@ -119,8 +115,7 @@ def show_opportunity_detail_modal(opportunity: Dict[str, Any]):
     Args:
         opportunity: Opportunity data dictionary
 
-    TODO: Implement modal dialog
-    TODO: Add execution details if available
+    Note: Placeholder for future modal dialog implementation.
     """
     st.write("### Opportunity Details")
     st.json(opportunity)

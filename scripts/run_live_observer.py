@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-Live observer script for Polymarket arbitrage opportunities.
+Live observer script for Polymarket arbitrage opportunities (CLI mode).
 
-This script:
+This script runs a command-line observer that:
 1. Connects to Polymarket streams (via WebSocket or API polling)
 2. Detects arbitrage opportunities in real-time
 3. Sends alerts via configured notification method
@@ -10,8 +10,10 @@ This script:
 5. Logs everything to database
 6. NEVER TRADES - detection only!
 
+Note: For the interactive UI dashboard, use `streamlit run run_live.py` instead.
+
 Usage:
-    python scripts/run_live.py [OPTIONS]
+    python scripts/run_live_observer.py [OPTIONS]
 
 Options:
     --mode {stream,poll}          Connection mode (default: poll)
