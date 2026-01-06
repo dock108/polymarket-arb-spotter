@@ -400,8 +400,8 @@ class ArbitrageDetector:
 
             cursor.execute(
                 """
-                INSERT INTO opportunities 
-                (market_id, market_name, opportunity_type, expected_profit, 
+                INSERT INTO opportunities
+                (market_id, market_name, opportunity_type, expected_profit,
                  expected_return_pct, detected_at, risk_score)
                 VALUES (?, ?, ?, ?, ?, ?, ?)
             """,
