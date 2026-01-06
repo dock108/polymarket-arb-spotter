@@ -26,6 +26,14 @@ from app.core.history_store import (
 )
 from app.core.logger import logger
 
+# Import depth scanner at module level for better performance
+try:
+    from app.core.depth_scanner import analyze_depth, detect_depth_signals
+except ImportError:
+    # Gracefully handle if depth_scanner is not available
+    analyze_depth = None
+    detect_depth_signals = None
+
 
 class PlaybackSpeed(Enum):
     """Predefined playback speeds for historical replay."""
@@ -631,10 +639,12 @@ class BacktestEngine:
         if not self.depth_config:
             return
 
-        try:
-            # Import here to avoid circular dependency
-            from app.core.depth_scanner import analyze_depth, detect_depth_signals
+        # Check if depth scanner functions are available
+        if analyze_depth is None or detect_depth_signals is None:
+            logger.warning("Depth scanner functions not available, skipping depth analysis")
+            return
 
+        try:
             # Check if tick has depth summary
             depth_summary = tick.get("depth_summary")
             if not depth_summary:
@@ -725,6 +735,10 @@ class BacktestEngine:
             "depth_signals": 0,
             "markets_analyzed": set(),
         }
+
+        # Reset price alert triggered states for fresh backtest
+        for alert in self.price_alerts:
+            alert["triggered"] = False
 
         try:
             if market_ids:

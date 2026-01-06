@@ -167,7 +167,7 @@ class TestBacktestResults(unittest.TestCase):
             append_backtest_result(
                 strategy="arb_detector",
                 market_id="market_1",
-                timestamp=f"2024-01-05T12:0{i}:00",
+                timestamp=f"2024-01-05T12:{i:02d}:00",
                 signal={},
                 simulated_outcome="would_trigger",
                 db_path=self.test_db_path,
@@ -364,6 +364,24 @@ class TestBacktestEngine(unittest.TestCase):
         # Should have processed ticks but no alerts triggered
         self.assertGreater(stats["ticks_processed"], 0)
         self.assertEqual(stats["price_alerts_triggered"], 0)
+
+    def test_backtest_price_alert_state_reset(self):
+        """Test that price alert states are reset between backtest runs."""
+        engine = BacktestEngine(db_path=self.test_db_path)
+        engine.add_price_alert("market_price", "above", 0.70)
+
+        # Run backtest first time
+        stats1 = engine.run_backtest(
+            market_ids=["market_price"], limit_per_market=10
+        )
+        self.assertGreater(stats1["price_alerts_triggered"], 0)
+
+        # Run backtest again - should trigger again
+        stats2 = engine.run_backtest(
+            market_ids=["market_price"], limit_per_market=10
+        )
+        self.assertGreater(stats2["price_alerts_triggered"], 0)
+        self.assertEqual(stats1["price_alerts_triggered"], stats2["price_alerts_triggered"])
 
 
 if __name__ == "__main__":
