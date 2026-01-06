@@ -13,6 +13,7 @@ from app.core.arb_detector import ArbitrageDetector
 from app.core.config import config
 from app.core.logger import fetch_recent, logger
 from app.core.mock_data import MockDataGenerator
+from app.ui.price_alerts_view import render_price_alerts_view
 
 # Add project root to Python path if running directly
 if __name__ == "__main__":
@@ -30,7 +31,7 @@ def render_dashboard():
 
     # Sidebar navigation
     st.sidebar.title("📊 Navigation")
-    page = st.sidebar.radio("Go to", ["Dashboard", "History", "Settings"])
+    page = st.sidebar.radio("Go to", ["Dashboard", "History", "Price Alerts", "Settings"])
 
     # Mode toggle in sidebar
     st.sidebar.markdown("---")
@@ -49,6 +50,8 @@ def render_dashboard():
         render_dashboard_content()
     elif page == "History":
         render_history_view()
+    elif page == "Price Alerts":
+        render_price_alerts_view()
     elif page == "Settings":
         render_settings_view()
 
