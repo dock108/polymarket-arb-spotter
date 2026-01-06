@@ -272,7 +272,9 @@ def fetch_recent_price_alerts(
         # Get column names
         columns = [
             col[0]
-            for col in db.execute("SELECT * FROM price_alert_events LIMIT 0").description
+            for col in db.execute(
+                "SELECT * FROM price_alert_events LIMIT 0"
+            ).description
         ]
 
         return [dict(zip(columns, row)) for row in rows]
