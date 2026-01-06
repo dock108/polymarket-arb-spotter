@@ -20,7 +20,10 @@ from app.core.logger import logger
 
 @dataclass
 class NormalizedOrderBook:
-    """Normalized order book with best bid/ask for yes and no outcomes."""
+    """Normalized order book with best bid/ask for yes and no outcomes.
+    
+    Optionally includes depth levels (top N bids/asks) for more detailed analysis.
+    """
 
     yes_best_bid: Optional[float] = None
     yes_best_ask: Optional[float] = None
@@ -28,10 +31,16 @@ class NormalizedOrderBook:
     no_best_ask: Optional[float] = None
     market_id: str = ""
     timestamp: Optional[datetime] = None
+    
+    # Depth levels: lists of [price, size] pairs
+    yes_bids: Optional[List[List[float]]] = None  # [[price, size], ...]
+    yes_asks: Optional[List[List[float]]] = None  # [[price, size], ...]
+    no_bids: Optional[List[List[float]]] = None   # [[price, size], ...]
+    no_asks: Optional[List[List[float]]] = None   # [[price, size], ...]
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary representation."""
-        return {
+        result = {
             "yes_best_bid": self.yes_best_bid,
             "yes_best_ask": self.yes_best_ask,
             "no_best_bid": self.no_best_bid,
@@ -39,6 +48,18 @@ class NormalizedOrderBook:
             "market_id": self.market_id,
             "timestamp": self.timestamp.isoformat() if self.timestamp else None,
         }
+        
+        # Include depth levels if present
+        if self.yes_bids is not None:
+            result["yes_bids"] = self.yes_bids
+        if self.yes_asks is not None:
+            result["yes_asks"] = self.yes_asks
+        if self.no_bids is not None:
+            result["no_bids"] = self.no_bids
+        if self.no_asks is not None:
+            result["no_asks"] = self.no_asks
+            
+        return result
 
 
 class PolymarketAPIClient:
@@ -203,18 +224,21 @@ class PolymarketAPIClient:
             logger.error(f"Failed to decode markets response: {e}")
             return []
 
-    def fetch_orderbook(self, market_id: str) -> Optional[NormalizedOrderBook]:
+    def fetch_orderbook(
+        self, market_id: str, depth: int = 5
+    ) -> Optional[NormalizedOrderBook]:
         """
         Fetch and normalize orderbook data for a market.
 
         The order book is normalized to provide best bid/ask prices for
-        both YES and NO outcomes.
+        both YES and NO outcomes, along with top N levels for depth analysis.
 
         Args:
             market_id: Market token ID (condition_id or token_id)
+            depth: Number of price levels to include for each side (default: 5)
 
         Returns:
-            NormalizedOrderBook with best prices, or None if unavailable
+            NormalizedOrderBook with best prices and depth levels, or None if unavailable
         """
         logger.info(f"Fetching orderbook for: {market_id}")
 
@@ -228,13 +252,13 @@ class PolymarketAPIClient:
 
         try:
             data = response.json()
-            return self._normalize_orderbook(data, market_id)
+            return self._normalize_orderbook(data, market_id, depth=depth)
         except json.JSONDecodeError as e:
             logger.error(f"Failed to decode orderbook response: {e}")
             return None
 
     def _normalize_orderbook(
-        self, raw_orderbook: Dict[str, Any], market_id: str
+        self, raw_orderbook: Dict[str, Any], market_id: str, depth: int = 5
     ) -> NormalizedOrderBook:
         """
         Normalize raw orderbook data into standardized format.
@@ -249,9 +273,10 @@ class PolymarketAPIClient:
         Args:
             raw_orderbook: Raw orderbook data from API
             market_id: Market identifier
+            depth: Number of price levels to include for each side (default: 5)
 
         Returns:
-            NormalizedOrderBook with best prices
+            NormalizedOrderBook with best prices and depth levels
         """
         normalized = NormalizedOrderBook(
             market_id=market_id,
@@ -261,20 +286,34 @@ class PolymarketAPIClient:
         # Extract bids (buy orders) - sorted by price descending
         bids = raw_orderbook.get("bids", [])
         if bids:
-            # Find the highest bid (best bid)
+            # Sort bids by price descending to get best prices first
             sorted_bids = sorted(
                 bids, key=lambda x: float(x.get("price", 0)), reverse=True
             )
             if sorted_bids:
+                # Set best bid (highest price)
                 normalized.yes_best_bid = float(sorted_bids[0].get("price", 0))
+                
+                # Extract top N levels for YES bids
+                normalized.yes_bids = [
+                    [float(bid.get("price", 0)), float(bid.get("size", 0))]
+                    for bid in sorted_bids[:depth]
+                ]
 
         # Extract asks (sell orders) - sorted by price ascending
         asks = raw_orderbook.get("asks", [])
         if asks:
-            # Find the lowest ask (best ask)
+            # Sort asks by price ascending to get best prices first
             sorted_asks = sorted(asks, key=lambda x: float(x.get("price", 0)))
             if sorted_asks:
+                # Set best ask (lowest price)
                 normalized.yes_best_ask = float(sorted_asks[0].get("price", 0))
+                
+                # Extract top N levels for YES asks
+                normalized.yes_asks = [
+                    [float(ask.get("price", 0)), float(ask.get("size", 0))]
+                    for ask in sorted_asks[:depth]
+                ]
 
         # Derive NO prices from YES prices (binary market: YES + NO = 1)
         if normalized.yes_best_ask is not None:
@@ -286,6 +325,21 @@ class PolymarketAPIClient:
             # If I can sell YES at yes_best_bid, that implies I can buy NO at (1 - yes_best_bid)
             # So no_best_ask = 1 - yes_best_bid
             normalized.no_best_ask = round(1.0 - normalized.yes_best_bid, 4)
+        
+        # Derive NO depth levels from YES depth levels
+        # NO bids are derived from YES asks (buying NO = selling YES)
+        if normalized.yes_asks is not None:
+            normalized.no_bids = [
+                [round(1.0 - price, 4), size]
+                for price, size in normalized.yes_asks
+            ]
+        
+        # NO asks are derived from YES bids (selling NO = buying YES)
+        if normalized.yes_bids is not None:
+            normalized.no_asks = [
+                [round(1.0 - price, 4), size]
+                for price, size in normalized.yes_bids
+            ]
 
         return normalized
 
@@ -533,7 +587,9 @@ class PolymarketAPIClient:
             logger.error(f"Failed to decode market details response: {e}")
             return None
 
-    def get_orderbook(self, market_id: str) -> Optional[Dict[str, Any]]:
+    def get_orderbook(
+        self, market_id: str, depth: int = 5
+    ) -> Optional[Dict[str, Any]]:
         """
         Fetch orderbook data for a market.
 
@@ -541,11 +597,12 @@ class PolymarketAPIClient:
 
         Args:
             market_id: Market identifier
+            depth: Number of price levels to include for each side (default: 5)
 
         Returns:
             NormalizedOrderBook as dictionary or None if not available
         """
-        normalized = self.fetch_orderbook(market_id)
+        normalized = self.fetch_orderbook(market_id, depth=depth)
         if normalized is None:
             return None
         return normalized.to_dict()
@@ -612,7 +669,7 @@ class PolymarketAPIClient:
 
 
 def normalize_orderbook_from_json(
-    raw_data: Dict[str, Any], market_id: str = ""
+    raw_data: Dict[str, Any], market_id: str = "", depth: int = 5
 ) -> NormalizedOrderBook:
     """
     Utility function to normalize raw orderbook JSON data.
@@ -623,9 +680,10 @@ def normalize_orderbook_from_json(
     Args:
         raw_data: Raw orderbook data (e.g., from a JSON file)
         market_id: Optional market identifier
+        depth: Number of price levels to include for each side (default: 5)
 
     Returns:
-        NormalizedOrderBook with best prices
+        NormalizedOrderBook with best prices and depth levels
     """
     normalized = NormalizedOrderBook(
         market_id=market_id,
@@ -638,6 +696,12 @@ def normalize_orderbook_from_json(
         sorted_bids = sorted(bids, key=lambda x: float(x.get("price", 0)), reverse=True)
         if sorted_bids:
             normalized.yes_best_bid = float(sorted_bids[0].get("price", 0))
+            
+            # Extract top N levels for YES bids
+            normalized.yes_bids = [
+                [float(bid.get("price", 0)), float(bid.get("size", 0))]
+                for bid in sorted_bids[:depth]
+            ]
 
     # Extract asks (sell orders)
     asks = raw_data.get("asks", [])
@@ -645,6 +709,12 @@ def normalize_orderbook_from_json(
         sorted_asks = sorted(asks, key=lambda x: float(x.get("price", 0)))
         if sorted_asks:
             normalized.yes_best_ask = float(sorted_asks[0].get("price", 0))
+            
+            # Extract top N levels for YES asks
+            normalized.yes_asks = [
+                [float(ask.get("price", 0)), float(ask.get("size", 0))]
+                for ask in sorted_asks[:depth]
+            ]
 
     # Derive NO prices from YES prices
     if normalized.yes_best_ask is not None:
@@ -652,5 +722,18 @@ def normalize_orderbook_from_json(
 
     if normalized.yes_best_bid is not None:
         normalized.no_best_ask = round(1.0 - normalized.yes_best_bid, 4)
+    
+    # Derive NO depth levels from YES depth levels
+    if normalized.yes_asks is not None:
+        normalized.no_bids = [
+            [round(1.0 - price, 4), size]
+            for price, size in normalized.yes_asks
+        ]
+    
+    if normalized.yes_bids is not None:
+        normalized.no_asks = [
+            [round(1.0 - price, 4), size]
+            for price, size in normalized.yes_bids
+        ]
 
     return normalized
