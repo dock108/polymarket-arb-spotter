@@ -13,7 +13,7 @@ from datetime import datetime
 import pandas as pd
 import streamlit as st
 
-from app.core.logger import fetch_recent_price_alerts, init_db, logger
+from app.core.logger import fetch_recent_price_alerts, logger
 from app.core.price_alerts import add_alert, list_alerts, remove_alert
 
 
@@ -26,9 +26,6 @@ def render_price_alerts_view():
     """
     st.title("🔔 Price Alerts")
     st.markdown("---")
-
-    # Initialize database
-    init_db()
 
     # Add Alert Section
     st.subheader("➕ Add New Alert")
