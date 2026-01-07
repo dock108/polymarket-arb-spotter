@@ -19,10 +19,17 @@ from datetime import datetime
 import requests
 
 from app.core.config import get_config
+from app.core.logger import log_wallet_alert
+from app.core.wallet_classifier import (
+    classify_fresh_wallet,
+    classify_high_confidence,
+    classify_whale,
+)
 
 # Type checking imports (avoid circular imports at runtime)
 if TYPE_CHECKING:
     from app.core.depth_scanner import DepthSignal
+    from app.core.wallet_signals import WalletSignal
 
 # Setup logging
 logger = logging.getLogger(__name__)
@@ -750,3 +757,196 @@ This is an automated depth alert from Polymarket Arbitrage Spotter.
 """
 
     return message
+
+
+def send_wallet_alert(signal: Union["WalletSignal", Dict[str, Any]]) -> bool:
+    """
+    Send a wallet alert notification using the global notification service.
+
+    Args:
+        signal: WalletSignal object or dictionary containing wallet alert information.
+            Expected attributes/keys:
+            - wallet: Wallet address
+            - market_id: Market identifier
+            - signal_type: Type of wallet signal
+            - evidence: Dictionary containing signal evidence
+
+    Returns:
+        True if notification was sent successfully, False otherwise.
+        Always returns False (doesn't raise) if errors occur.
+    """
+    try:
+        if hasattr(signal, "to_dict"):
+            signal_dict = signal.to_dict()
+            wallet = signal.wallet
+            market_id = signal.market_id
+            signal_type = signal.signal_type
+            evidence = signal.evidence
+        else:
+            signal_dict = signal
+            wallet = signal_dict.get("wallet", "")
+            market_id = signal_dict.get("market_id", "Unknown")
+            signal_type = signal_dict.get(
+                "signal_type", signal_dict.get("type", "unknown")
+            )
+            evidence = signal_dict.get("evidence", {})
+
+        bet_size = _extract_bet_size(evidence)
+        classification = _classify_wallet_label(wallet)
+        wallet_short = _short_wallet_address(wallet)
+        profile_url = _wallet_profile_url(wallet)
+
+        service = get_notification_service()
+
+        if not service.config.alert_method:
+            logger.info(
+                "Wallet alert triggered (notifications disabled): "
+                "%s - %s (%s)",
+                wallet_short,
+                market_id,
+                classification,
+            )
+            log_wallet_alert(
+                {
+                    "timestamp": datetime.now().isoformat(),
+                    "wallet": wallet,
+                    "market_id": market_id,
+                    "bet_size": bet_size,
+                    "classification": classification,
+                    "signal_type": signal_type,
+                    "profile_url": profile_url,
+                    "evidence": evidence,
+                }
+            )
+            return False
+
+        notification_data = {
+            "wallet": wallet,
+            "wallet_short": wallet_short,
+            "market_id": market_id,
+            "bet_size": bet_size,
+            "classification": classification,
+            "profile_url": profile_url,
+            "signal_type": signal_type,
+            "timestamp": datetime.now().isoformat(),
+            "evidence": evidence,
+        }
+
+        message = _format_wallet_alert_message(notification_data)
+        subject = _format_wallet_alert_subject(notification_data)
+
+        success = False
+        if service.config.alert_method == "telegram":
+            success = service._send_telegram(message)
+        elif service.config.alert_method == "email":
+            success = service._send_email(subject, message)
+
+        log_wallet_alert(
+            {
+                "timestamp": notification_data["timestamp"],
+                "wallet": wallet,
+                "market_id": market_id,
+                "bet_size": bet_size,
+                "classification": classification,
+                "signal_type": signal_type,
+                "profile_url": profile_url,
+                "evidence": evidence,
+            }
+        )
+
+        if success:
+            logger.info(
+                "Wallet alert sent successfully via %s: %s - %s",
+                service.config.alert_method,
+                wallet_short,
+                market_id,
+            )
+        else:
+            logger.warning(
+                "Failed to send wallet alert via %s: %s - %s",
+                service.config.alert_method,
+                wallet_short,
+                market_id,
+            )
+
+        return success
+
+    except Exception as e:
+        logger.error(f"Error sending wallet alert: {e}", exc_info=True)
+        return False
+
+
+def _format_wallet_alert_subject(alert_data: Dict[str, Any]) -> str:
+    """Format the subject line for a wallet alert."""
+    wallet_short = alert_data.get("wallet_short", "Unknown Wallet")
+    market_id = alert_data.get("market_id", "Unknown Market")
+    classification = alert_data.get("classification", "unknown")
+    return f"🔔 Wallet Alert: {wallet_short} {classification} - {market_id}"
+
+
+def _format_wallet_alert_message(alert_data: Dict[str, Any]) -> str:
+    """Format the message body for a wallet alert."""
+    wallet_short = alert_data.get("wallet_short", "Unknown Wallet")
+    market_id = alert_data.get("market_id", "Unknown Market")
+    bet_size = alert_data.get("bet_size")
+    classification = alert_data.get("classification", "unknown")
+    profile_url = alert_data.get("profile_url", "N/A")
+    signal_type = alert_data.get("signal_type", "unknown")
+    timestamp = alert_data.get("timestamp", datetime.now().isoformat())
+
+    bet_size_str = f"${bet_size:,.2f}" if isinstance(bet_size, (int, float)) else "N/A"
+
+    message = f"""🔔 Wallet Alert Triggered!
+
+Wallet: {wallet_short}
+Market: {market_id}
+Bet Size: {bet_size_str}
+Classification: {classification}
+Signal: {signal_type}
+Profile: {profile_url}
+
+Timestamp: {timestamp}
+
+This is an automated wallet alert from Polymarket Arbitrage Spotter.
+"""
+
+    return message
+
+
+def _short_wallet_address(wallet: str) -> str:
+    """Shorten wallet address for display."""
+    if not wallet:
+        return "N/A"
+    if len(wallet) <= 12:
+        return wallet
+    return f"{wallet[:6]}…{wallet[-4:]}"
+
+
+def _wallet_profile_url(wallet: str) -> str:
+    """Build Polymarket profile URL for wallet."""
+    if not wallet:
+        return "N/A"
+    return f"https://polymarket.com/profile/{wallet}"
+
+
+def _extract_bet_size(evidence: Any) -> Optional[float]:
+    """Extract a bet size from signal evidence."""
+    if isinstance(evidence, dict):
+        for key in ("size", "total_size", "bet_size"):
+            value = evidence.get(key)
+            if isinstance(value, (int, float)):
+                return float(value)
+    return None
+
+
+def _classify_wallet_label(wallet: str) -> str:
+    """Classify wallet for alert messaging."""
+    if not wallet:
+        return "unknown"
+    if classify_fresh_wallet(wallet):
+        return "fresh"
+    if classify_whale(wallet):
+        return "whale"
+    if classify_high_confidence(wallet):
+        return "pro"
+    return "unknown"
