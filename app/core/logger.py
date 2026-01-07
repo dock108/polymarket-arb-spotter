@@ -148,6 +148,22 @@ def init_db(db_path: str = _DB_PATH) -> None:
             pk="id",
         )
 
+    # Create wallet_alerts table with schema if it doesn't exist
+    if "wallet_alerts" not in db.table_names():
+        db["wallet_alerts"].create(
+            {
+                "timestamp": str,
+                "wallet": str,
+                "market_id": str,
+                "bet_size": float,
+                "classification": str,
+                "signal_type": str,
+                "profile_url": str,
+                "evidence": str,  # JSON string containing signal evidence
+            },
+            pk="id",
+        )
+
 
 def log_event(data: Dict[str, Any], db_path: str = _DB_PATH) -> None:
     """
@@ -191,7 +207,8 @@ def _get_table_columns(db: Database, table_name: str) -> List[str]:
     Args:
         db: Database instance
         table_name: Name of the table. Must be one of: 'arbitrage_events',
-                   'price_alert_events', 'depth_events', 'history_labels'
+                   'price_alert_events', 'depth_events', 'history_labels',
+                   'wallet_alerts'
 
     Returns:
         List of column names
@@ -205,6 +222,7 @@ def _get_table_columns(db: Database, table_name: str) -> List[str]:
         "price_alert_events",
         "depth_events",
         "history_labels",
+        "wallet_alerts",
     }
     if table_name not in allowed_tables:
         raise ValueError(f"Invalid table name: {table_name}")
@@ -644,6 +662,86 @@ def fetch_history_labels(
 
     except Exception as e:
         logger.error(f"Error fetching history labels: {e}", exc_info=True)
+        return []
+
+
+def log_wallet_alert(data: Dict[str, Any], db_path: str = _DB_PATH) -> None:
+    """
+    Log a wallet alert event to the database.
+
+    Args:
+        data: Dictionary containing the wallet alert data with keys:
+            - timestamp (datetime or str): When the alert was triggered
+            - wallet (str): Wallet address
+            - market_id (str): Unique identifier of the market
+            - bet_size (float): Bet size associated with the alert
+            - classification (str): Wallet classification (fresh/whale/pro)
+            - signal_type (str): Wallet signal type
+            - profile_url (str): Polymarket profile URL
+            - evidence (dict | str): Evidence payload (JSON serialized if dict)
+        db_path: Path to the SQLite database file
+    """
+    try:
+        db = Database(db_path)
+
+        event_data = data.copy()
+        if hasattr(event_data.get("timestamp"), "isoformat"):
+            event_data["timestamp"] = event_data["timestamp"].isoformat()
+
+        if isinstance(event_data.get("evidence"), dict):
+            event_data["evidence"] = json.dumps(event_data["evidence"])
+
+        db["wallet_alerts"].insert(event_data)
+
+    except Exception as e:
+        logger.error(f"Error logging wallet alert to database: {e}", exc_info=True)
+
+
+def fetch_recent_wallet_alerts(
+    limit: int = 100, db_path: str = _DB_PATH
+) -> List[Dict[str, Any]]:
+    """
+    Fetch the most recent wallet alerts from the database.
+
+    Args:
+        limit: Maximum number of entries to retrieve (default: 100)
+        db_path: Path to the SQLite database file
+
+    Returns:
+        List of dictionaries containing the wallet alert data,
+        ordered by timestamp in descending order (most recent first).
+        The 'evidence' field is deserialized from JSON to a dictionary.
+    """
+    try:
+        db = Database(db_path)
+
+        if "wallet_alerts" not in db.table_names():
+            return []
+
+        rows = db.execute(
+            "SELECT * FROM wallet_alerts ORDER BY timestamp DESC LIMIT ?",
+            [limit],
+        ).fetchall()
+
+        if not rows:
+            return []
+
+        columns = _get_table_columns(db, "wallet_alerts")
+
+        results = []
+        for row in rows:
+            row_dict = dict(zip(columns, row))
+            if row_dict.get("evidence"):
+                try:
+                    row_dict["evidence"] = json.loads(row_dict["evidence"])
+                except (json.JSONDecodeError, TypeError):
+                    pass
+            results.append(row_dict)
+
+        return results
+
+    except Exception as e:
+        logger.error(f"Error fetching recent wallet alerts: {e}", exc_info=True)
         return []
 
 
