@@ -5,6 +5,7 @@ A Python tool for detecting arbitrage opportunities in Polymarket prediction mar
 ## 🚀 Features
 
 - **Real-time Detection**: Monitor Polymarket markets for arbitrage opportunities
+- **Wallet Event Ingestion**: Track and analyze wallet transactions and trades
 - **Historical Replay Engine**: Test algorithms against past markets with configurable playback speeds
 - **Backtest Alerts**: Dry-run simulation to evaluate detection tool performance on historical data
 - **Price Alert Watcher**: Subscribe to markets and get alerted when prices cross thresholds
@@ -125,6 +126,7 @@ See `.env.example` for all available options.
 
 | Document | Description |
 |----------|-------------|
+| [Wallet Feed](docs/wallet_feed.md) | Wallet transaction ingestion and tracking |
 | [Replay Engine](docs/replay_engine.md) | Historical data replay and backtesting |
 | [Backtest Alerts](docs/backtest_alerts.md) | Dry-run simulation for tool evaluation |
 | [Notification Setup](docs/notifications.md) | Configure Telegram/email alerts |
