@@ -323,6 +323,72 @@ def fetch_recent_price_alerts(
         return []
 
 
+def fetch_price_alert_events(
+    market_id: Optional[str] = None,
+    start: Optional[str] = None,
+    end: Optional[str] = None,
+    limit: int = 1000,
+    db_path: str = _DB_PATH,
+) -> List[Dict[str, Any]]:
+    """
+    Fetch price alert events from the database with filtering options.
+
+    Args:
+        market_id: Optional market ID to filter by
+        start: Optional start timestamp (ISO format string)
+        end: Optional end timestamp (ISO format string)
+        limit: Maximum number of entries to retrieve (default: 1000)
+        db_path: Path to the SQLite database file
+
+    Returns:
+        List of dictionaries containing the price alert event data,
+        ordered by timestamp in descending order (most recent first)
+    """
+    try:
+        db = Database(db_path)
+
+        # Check if table exists
+        if "price_alert_events" not in db.table_names():
+            return []
+
+        # Build query
+        query = "SELECT * FROM price_alert_events"
+        params: List[Any] = []
+        where_clauses = []
+
+        if market_id:
+            where_clauses.append("market_id = ?")
+            params.append(market_id)
+
+        if start:
+            where_clauses.append("timestamp >= ?")
+            params.append(start)
+
+        if end:
+            where_clauses.append("timestamp <= ?")
+            params.append(end)
+
+        if where_clauses:
+            query += " WHERE " + " AND ".join(where_clauses)
+
+        query += " ORDER BY timestamp DESC LIMIT ?"
+        params.append(limit)
+
+        rows = db.execute(query, params).fetchall()
+
+        if not rows:
+            return []
+
+        # Get column names
+        columns = _get_table_columns(db, "price_alert_events")
+
+        return [dict(zip(columns, row)) for row in rows]
+
+    except Exception as e:
+        logger.error(f"Error fetching price alert events: {e}", exc_info=True)
+        return []
+
+
 def log_depth_event(data: Dict[str, Any], db_path: str = _DB_PATH) -> None:
     """
     Log a depth event to the database.
@@ -406,6 +472,84 @@ def fetch_recent_depth_events(
 
     except Exception as e:
         logger.error(f"Error fetching recent depth events: {e}", exc_info=True)
+        return []
+
+
+def fetch_depth_events(
+    market_id: Optional[str] = None,
+    start: Optional[str] = None,
+    end: Optional[str] = None,
+    limit: int = 1000,
+    db_path: str = _DB_PATH,
+) -> List[Dict[str, Any]]:
+    """
+    Fetch depth events from the database with filtering options.
+
+    Args:
+        market_id: Optional market ID to filter by
+        start: Optional start timestamp (ISO format string)
+        end: Optional end timestamp (ISO format string)
+        limit: Maximum number of entries to retrieve (default: 1000)
+        db_path: Path to the SQLite database file
+
+    Returns:
+        List of dictionaries containing the depth event data,
+        ordered by timestamp in descending order (most recent first).
+        The 'metrics' field is deserialized from JSON to a dictionary.
+    """
+    try:
+        db = Database(db_path)
+
+        # Check if table exists
+        if "depth_events" not in db.table_names():
+            return []
+
+        # Build query
+        query = "SELECT * FROM depth_events"
+        params: List[Any] = []
+        where_clauses = []
+
+        if market_id:
+            where_clauses.append("market_id = ?")
+            params.append(market_id)
+
+        if start:
+            where_clauses.append("timestamp >= ?")
+            params.append(start)
+
+        if end:
+            where_clauses.append("timestamp <= ?")
+            params.append(end)
+
+        if where_clauses:
+            query += " WHERE " + " AND ".join(where_clauses)
+
+        query += " ORDER BY timestamp DESC LIMIT ?"
+        params.append(limit)
+
+        rows = db.execute(query, params).fetchall()
+
+        if not rows:
+            return []
+
+        # Get column names
+        columns = _get_table_columns(db, "depth_events")
+
+        results = []
+        for row in rows:
+            row_dict = dict(zip(columns, row))
+            # Deserialize metrics JSON string to dict
+            if row_dict.get("metrics"):
+                try:
+                    row_dict["metrics"] = json.loads(row_dict["metrics"])
+                except (json.JSONDecodeError, TypeError):
+                    pass  # Keep as string if deserialization fails
+            results.append(row_dict)
+
+        return results
+
+    except Exception as e:
+        logger.error(f"Error fetching depth events: {e}", exc_info=True)
         return []
 
 

@@ -16,6 +16,8 @@ import streamlit as st
 from app.core.history_store import get_market_ids, get_ticks
 from app.core.logger import (
     fetch_history_labels,
+    fetch_price_alert_events,
+    fetch_depth_events,
     save_history_label,
     delete_history_label,
     init_db,
@@ -187,43 +189,95 @@ def _render_price_chart_tab(
         st.markdown("#### Volume")
         st.line_chart(chart_df[["volume"]])
 
-    # Fetch and display labels as timeline
+    # Fetch all events: labels, alerts, and depth signals
     labels = fetch_history_labels(
         market_id=market_id,
         start=start_date.isoformat(),
         end=end_date.isoformat(),
     )
+    
+    alerts = fetch_price_alert_events(
+        market_id=market_id,
+        start=start_date.isoformat(),
+        end=end_date.isoformat(),
+    )
+    
+    depth_signals = fetch_depth_events(
+        market_id=market_id,
+        start=start_date.isoformat(),
+        end=end_date.isoformat(),
+    )
 
-    if labels:
-        st.markdown("### 🏷️ Labeled Events Timeline")
-
-        # Create a timeline visualization
-        labels_df = pd.DataFrame(labels)
-        labels_df["timestamp"] = pd.to_datetime(labels_df["timestamp"])
-
-        # Display as table with timestamp and label
-        display_df = labels_df[["timestamp", "label_type", "notes"]].copy()
-        display_df.columns = ["Time", "Label", "Notes"]
-        st.dataframe(display_df, use_container_width=True)
-
-        # Show labels on timeline
-        st.markdown("#### Events on Timeline")
-        for _, label in labels_df.iterrows():
-            timestamp = label["timestamp"]
-            label_type = label["label_type"]
-            notes = label.get("notes", "")
-
-            # Create emoji mapping for visual indicators
-            emoji_map = {
+    # Combine all events into a unified timeline
+    all_events = []
+    
+    # Add labels
+    for label in labels:
+        all_events.append({
+            "timestamp": label["timestamp"],
+            "event_type": "Label",
+            "detail": label["label_type"],
+            "notes": label.get("notes", ""),
+            "emoji": {
                 "news-driven move": "📰",
                 "whale entry": "🐋",
                 "arb collapse": "📉",
                 "false signal": "❌",
-            }
-            emoji = emoji_map.get(label_type, "🏷️")
+            }.get(label["label_type"], "🏷️")
+        })
+    
+    # Add alerts
+    for alert in alerts:
+        direction = alert.get("direction", "")
+        target_price = alert.get("target_price", 0)
+        all_events.append({
+            "timestamp": alert["timestamp"],
+            "event_type": "Price Alert",
+            "detail": f"{direction} {target_price:.3f}",
+            "notes": f"Triggered at {alert.get('trigger_price', 0):.3f}",
+            "emoji": "🔔"
+        })
+    
+    # Add depth signals
+    for depth in depth_signals:
+        signal_type = depth.get("signal_type", "")
+        threshold = depth.get("threshold_hit", "")
+        all_events.append({
+            "timestamp": depth["timestamp"],
+            "event_type": "Depth Signal",
+            "detail": signal_type,
+            "notes": threshold,
+            "emoji": {
+                "thin_depth": "📊",
+                "large_gap": "↔️",
+                "strong_imbalance": "⚖️",
+            }.get(signal_type, "📈")
+        })
 
+    if all_events:
+        st.markdown("### 🎯 Events Timeline (Labels + Alerts + Depth Signals)")
+        
+        # Create a DataFrame for all events
+        events_df = pd.DataFrame(all_events)
+        events_df["timestamp"] = pd.to_datetime(events_df["timestamp"])
+        events_df = events_df.sort_values("timestamp", ascending=False)
+        
+        # Display as table
+        display_df = events_df[["timestamp", "event_type", "detail", "notes"]].copy()
+        display_df.columns = ["Time", "Type", "Detail", "Notes"]
+        st.dataframe(display_df, use_container_width=True)
+        
+        # Show events on timeline with visual markers
+        st.markdown("#### 📍 Event Markers")
+        for _, event in events_df.iterrows():
+            timestamp = event["timestamp"]
+            event_type = event["event_type"]
+            detail = event["detail"]
+            notes = event.get("notes", "")
+            emoji = event.get("emoji", "📌")
+            
             st.text(
-                f"{emoji} {timestamp.strftime('%Y-%m-%d %H:%M:%S')} - {label_type}"
+                f"{emoji} {timestamp.strftime('%Y-%m-%d %H:%M:%S')} - {event_type}: {detail}"
                 + (f" - {notes}" if notes else "")
             )
 
