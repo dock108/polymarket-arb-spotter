@@ -94,9 +94,7 @@ class TestHistoryLabels(unittest.TestCase):
 
         # Fetch only recent labels
         start = (base_time - timedelta(days=1)).isoformat()
-        labels = fetch_history_labels(
-            market_id=test_market, start=start, limit=10
-        )
+        labels = fetch_history_labels(market_id=test_market, start=start, limit=10)
 
         # Should only get the recent label
         self.assertGreaterEqual(len(labels), 1)

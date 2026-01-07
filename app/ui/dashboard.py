@@ -12,7 +12,6 @@ import pandas as pd
 import streamlit as st
 
 from app.core.arb_detector import ArbitrageDetector
-from app.core.config import config
 from app.core.history_recorder import record_market_tick
 from app.core.logger import fetch_recent, logger
 from app.core.mock_data import MockDataGenerator
@@ -40,7 +39,16 @@ def render_dashboard():
     # Sidebar navigation
     st.sidebar.title("📊 Navigation")
     page = st.sidebar.radio(
-        "Go to", ["Dashboard", "Pattern Insights", "History", "Replay & Label", "Depth Monitor", "Price Alerts", "Settings"]
+        "Go to",
+        [
+            "Dashboard",
+            "Pattern Insights",
+            "History",
+            "Replay & Label",
+            "Depth Monitor",
+            "Price Alerts",
+            "Settings",
+        ],
     )
 
     # Mode toggle in sidebar

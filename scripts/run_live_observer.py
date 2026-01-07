@@ -539,16 +539,16 @@ def main():
 Examples:
   # Run with default settings (poll mode, 30s interval)
   python scripts/run_live_observer.py
-  
+
   # Run with custom poll interval
   python scripts/run_live_observer.py --poll-interval 60
-  
+
   # Run for 5 minutes with alerts
   python scripts/run_live_observer.py --duration 300
-  
+
   # Run in stream mode (requires WebSocket)
   python scripts/run_live_observer.py --mode stream
-  
+
   # Run without mock trade simulation
   python scripts/run_live_observer.py --no-mock-trades
 

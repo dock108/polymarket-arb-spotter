@@ -412,7 +412,7 @@ class TestGetTicks(TestHistoryStore):
     def test_get_ticks_limit(self):
         """Test that limit parameter is respected."""
         from datetime import datetime, timedelta
-        
+
         base_time = datetime(2024, 1, 5, 10, 0, 0)
         for i in range(20):
             append_tick(

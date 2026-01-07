@@ -16,9 +16,7 @@ from app.core.depth_scanner import (
 )
 
 
-def create_mock_orderbook(
-    bids: List[tuple], asks: List[tuple]
-) -> Dict[str, Any]:
+def create_mock_orderbook(bids: List[tuple], asks: List[tuple]) -> Dict[str, Any]:
     """
     Create a mock orderbook from price/size tuples.
 

@@ -31,7 +31,7 @@ class TestDepthConfigHelpers(unittest.TestCase):
         # Clean up any files in test directory
         if os.path.exists(self.test_config_path):
             os.remove(self.test_config_path)
-        
+
         # Clean up any nested directories that might have been created
         if os.path.exists(self.test_dir):
             for root, dirs, files in os.walk(self.test_dir, topdown=False):
@@ -82,7 +82,9 @@ class TestDepthConfigHelpers(unittest.TestCase):
         self.assertEqual(loaded_config["min_depth"], 1000.0)
         self.assertEqual(loaded_config["max_gap"], 0.05)
         self.assertEqual(loaded_config["imbalance_ratio"], 500.0)
-        self.assertEqual(loaded_config["markets_to_watch"], ["market1", "market2", "market3"])
+        self.assertEqual(
+            loaded_config["markets_to_watch"], ["market1", "market2", "market3"]
+        )
 
     def test_load_config_with_missing_keys(self):
         """Test that loading config with missing keys merges with defaults."""
@@ -100,8 +102,12 @@ class TestDepthConfigHelpers(unittest.TestCase):
         self.assertEqual(loaded_config["min_depth"], 2000.0)
         # Should have defaults for other keys
         self.assertEqual(loaded_config["max_gap"], DEFAULT_CONFIG["max_gap"])
-        self.assertEqual(loaded_config["imbalance_ratio"], DEFAULT_CONFIG["imbalance_ratio"])
-        self.assertEqual(loaded_config["markets_to_watch"], DEFAULT_CONFIG["markets_to_watch"])
+        self.assertEqual(
+            loaded_config["imbalance_ratio"], DEFAULT_CONFIG["imbalance_ratio"]
+        )
+        self.assertEqual(
+            loaded_config["markets_to_watch"], DEFAULT_CONFIG["markets_to_watch"]
+        )
 
     def test_save_config_creates_directory(self):
         """Test that save_config creates parent directory if it doesn't exist."""

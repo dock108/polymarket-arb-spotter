@@ -35,7 +35,7 @@ from typing import Dict, Any
 # Add parent directory to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from app.core.replay import BacktestEngine, create_backtest_engine  # noqa: E402
+from app.core.replay import create_backtest_engine  # noqa: E402
 from app.core.arb_detector import ArbitrageDetector  # noqa: E402
 from app.core.history_store import get_backtest_results  # noqa: E402
 
@@ -90,7 +90,7 @@ def print_results_summary(stats: Dict[str, Any], db_path: str):
                     )
                 elif strategy == "depth_scanner" and signal:
                     print(f"    Signal: {signal.get('signal_type', 'unknown')}")
-                notes = result['notes']
+                notes = result["notes"]
                 print(f"    Notes: {notes[:60]}{'...' if len(notes) > 60 else ''}")
 
     print_separator()

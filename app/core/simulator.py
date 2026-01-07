@@ -1,11 +1,8 @@
 """
 Simulation engine for testing arbitrage detection algorithms.
 
-TODO: Implement backtesting framework
-TODO: Add performance metrics calculation
-TODO: Implement strategy comparison
-TODO: Add Monte Carlo simulation
-TODO: Add market replay functionality
+Provides backtesting framework with performance metrics calculation,
+strategy comparison capabilities, and market replay functionality.
 """
 
 import random
@@ -290,8 +287,6 @@ class Simulator:
         Args:
             detector: ArbitrageDetector instance
             data_generator: MockDataGenerator instance
-
-        TODO: Add configurable simulation parameters
         """
         self.detector = detector or ArbitrageDetector()
         self.data_generator = data_generator or MockDataGenerator()
@@ -396,10 +391,6 @@ class Simulator:
 
         Returns:
             Formatted report string
-
-        TODO: Add detailed profitability analysis
-        TODO: Add risk analysis
-        TODO: Export to different formats (CSV, JSON, PDF)
         """
         report = []
         report.append("=== Simulation Report ===")

@@ -237,9 +237,7 @@ class TestExportToCsv(TestExportHistory):
     def test_csv_content_correct(self):
         """Test that CSV content is correct."""
         self._create_test_data()
-        ticks = get_filtered_ticks(
-            market_ids=["market_a"], db_path=self.test_db_path
-        )
+        ticks = get_filtered_ticks(market_ids=["market_a"], db_path=self.test_db_path)
         output_path = os.path.join(self.test_output_dir, "export.csv")
 
         export_to_csv(ticks, output_path)
@@ -255,9 +253,7 @@ class TestExportToCsv(TestExportHistory):
     def test_csv_depth_summary_serialized(self):
         """Test that depth_summary is serialized as JSON in CSV."""
         self._create_test_data()
-        ticks = get_filtered_ticks(
-            market_ids=["market_b"], db_path=self.test_db_path
-        )
+        ticks = get_filtered_ticks(market_ids=["market_b"], db_path=self.test_db_path)
         output_path = os.path.join(self.test_output_dir, "export.csv")
 
         export_to_csv(ticks, output_path)
@@ -319,9 +315,7 @@ class TestExportToJsonl(TestExportHistory):
     def test_jsonl_content_correct(self):
         """Test that JSONL content is correct."""
         self._create_test_data()
-        ticks = get_filtered_ticks(
-            market_ids=["market_a"], db_path=self.test_db_path
-        )
+        ticks = get_filtered_ticks(market_ids=["market_a"], db_path=self.test_db_path)
         output_path = os.path.join(self.test_output_dir, "export.jsonl")
 
         export_to_jsonl(ticks, output_path)
@@ -337,9 +331,7 @@ class TestExportToJsonl(TestExportHistory):
     def test_jsonl_preserves_depth_summary_dict(self):
         """Test that depth_summary is preserved as dict in JSONL."""
         self._create_test_data()
-        ticks = get_filtered_ticks(
-            market_ids=["market_b"], db_path=self.test_db_path
-        )
+        ticks = get_filtered_ticks(market_ids=["market_b"], db_path=self.test_db_path)
         output_path = os.path.join(self.test_output_dir, "export.jsonl")
 
         export_to_jsonl(ticks, output_path)

@@ -227,9 +227,7 @@ def _render_recent_alerts_tab():
 
                 with stat_col2:
                     thin_depth_count = sum(
-                        1
-                        for a in recent_alerts
-                        if a.get("signal_type") == "thin_depth"
+                        1 for a in recent_alerts if a.get("signal_type") == "thin_depth"
                     )
                     st.metric("Thin Depth Alerts", thin_depth_count)
 
@@ -319,9 +317,7 @@ def _render_thresholds_tab(config: Dict[str, Any]):
             try:
                 # Parse markets to watch
                 markets_list = [
-                    m.strip()
-                    for m in markets_to_watch_str.split("\n")
-                    if m.strip()
+                    m.strip() for m in markets_to_watch_str.split("\n") if m.strip()
                 ]
 
                 new_config = {
@@ -362,7 +358,9 @@ def _render_thresholds_tab(config: Dict[str, Any]):
         st.markdown(f"**Maximum Gap:** {config.get('max_gap', 0):.4f}")
 
     with config_col2:
-        st.markdown(f"**Imbalance Threshold:** ${config.get('imbalance_ratio', 0):,.2f}")
+        st.markdown(
+            f"**Imbalance Threshold:** ${config.get('imbalance_ratio', 0):,.2f}"
+        )
         markets = config.get("markets_to_watch", [])
         if markets:
             st.markdown(f"**Markets Watched:** {len(markets)}")

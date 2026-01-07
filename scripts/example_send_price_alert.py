@@ -151,7 +151,7 @@ def handle_alert(alert):
     # Send notification when price alert triggers
     # Errors won't crash the monitoring loop
     send_price_alert(alert)
-    
+
 # Create watcher with callback
 watcher = PriceAlertWatcher(
     api_client=api_client,
