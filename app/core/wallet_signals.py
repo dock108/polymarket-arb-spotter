@@ -5,8 +5,10 @@ Generates structured alerts when wallet behavior suggests unusual or
 informative trading patterns.
 """
 
+from collections import Counter, defaultdict
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+from hashlib import sha1
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 from sqlite_utils import Database
@@ -57,6 +59,14 @@ class WalletSignalConfig:
     pile_in_min_total_size: float = 5000.0
     frontrun_window_minutes: int = 5
     frontrun_price_move_threshold: float = 0.05
+    cluster_window_minutes: int = 30
+    cluster_min_wallets: int = 3
+    cluster_timing_bucket_seconds: int = 60
+    cluster_timing_min_overlap: int = 3
+    cluster_market_min_overlap: int = 2
+    cluster_mirrored_seconds: int = 10
+    cluster_mirrored_min_pairs: int = 2
+    cluster_signal_min_matches: int = 2
 
 
 POLITICAL_KEYWORDS = (
@@ -259,6 +269,13 @@ def detect_wallet_signals(
                 signals.append(frontrun_signal)
                 seen_keys.add(key)
 
+    cluster_signals = _detect_wallet_clusters(trade_list, db, config)
+    for signal in cluster_signals:
+        key = ("wallet_cluster", signal.wallet, signal.evidence.get("cluster_id"))
+        if key not in seen_keys:
+            signals.append(signal)
+            seen_keys.add(key)
+
     return signals
 
 
@@ -331,6 +348,196 @@ def _fetch_trades_since(
         except Exception as exc:
             logger.warning("Skipping malformed trade row: %s", exc)
     return trades
+
+
+def _detect_wallet_clusters(
+    trades: List[WalletTrade],
+    db: Database,
+    config: WalletSignalConfig,
+) -> List[WalletSignal]:
+    """Detect wallet clusters that show coordinated behavior."""
+    if not trades:
+        return []
+
+    window_end = max(trade.timestamp for trade in trades)
+    window_start = window_end - timedelta(minutes=config.cluster_window_minutes)
+    db_trades = _fetch_trades_since(db, window_start)
+
+    merged: Dict[str, WalletTrade] = {trade.tx_hash: trade for trade in db_trades}
+    for trade in trades:
+        merged.setdefault(trade.tx_hash, trade)
+
+    all_trades = [
+        trade for trade in merged.values() if trade.wallet and trade.timestamp >= window_start
+    ]
+    if len(all_trades) < 2:
+        return []
+
+    wallet_trades: Dict[str, List[WalletTrade]] = defaultdict(list)
+    for trade in all_trades:
+        wallet_trades[trade.wallet].append(trade)
+
+    wallets = sorted(wallet_trades.keys())
+    if len(wallets) < config.cluster_min_wallets:
+        return []
+
+    market_sets: Dict[str, set] = {
+        wallet: {trade.market_id for trade in wallet_trades[wallet]}
+        for wallet in wallets
+    }
+    timing_buckets: Dict[str, set] = {
+        wallet: {
+            _bucket_timestamp(trade.timestamp, config.cluster_timing_bucket_seconds)
+            for trade in wallet_trades[wallet]
+        }
+        for wallet in wallets
+    }
+
+    mirrored_counts = _count_mirrored_pairs(
+        all_trades, config.cluster_mirrored_seconds
+    )
+
+    pair_metrics: Dict[Tuple[str, str], Dict[str, Any]] = {}
+    adjacency: Dict[str, set] = {wallet: set() for wallet in wallets}
+
+    for idx, wallet_a in enumerate(wallets):
+        for wallet_b in wallets[idx + 1 :]:
+            pair_key = (wallet_a, wallet_b)
+            timing_overlap = len(timing_buckets[wallet_a] & timing_buckets[wallet_b])
+            market_overlap = len(market_sets[wallet_a] & market_sets[wallet_b])
+            mirrored = mirrored_counts.get(pair_key, 0)
+            matches = {
+                "timing_patterns": timing_overlap >= config.cluster_timing_min_overlap,
+                "identical_markets": market_overlap >= config.cluster_market_min_overlap,
+                "mirrored_entries": mirrored >= config.cluster_mirrored_min_pairs,
+            }
+            match_count = sum(matches.values())
+            pair_metrics[pair_key] = {
+                "timing_overlap": timing_overlap,
+                "market_overlap": market_overlap,
+                "mirrored_count": mirrored,
+                "matches": matches,
+                "match_count": match_count,
+            }
+            if match_count >= config.cluster_signal_min_matches:
+                adjacency[wallet_a].add(wallet_b)
+                adjacency[wallet_b].add(wallet_a)
+
+    clusters: List[List[str]] = []
+    visited: set = set()
+    for wallet in wallets:
+        if wallet in visited:
+            continue
+        stack = [wallet]
+        component = []
+        while stack:
+            current = stack.pop()
+            if current in visited:
+                continue
+            visited.add(current)
+            component.append(current)
+            stack.extend(adjacency[current] - visited)
+        if len(component) >= config.cluster_min_wallets:
+            clusters.append(sorted(component))
+
+    signals: List[WalletSignal] = []
+    for cluster_wallets in clusters:
+        cluster_pairs = [
+            pair
+            for pair in pair_metrics
+            if pair[0] in cluster_wallets and pair[1] in cluster_wallets
+        ]
+        signal_match_counts = Counter()
+        mirrored_pair_total = 0
+        timing_overlap_max = 0
+        market_overlap_max = 0
+        for pair in cluster_pairs:
+            metrics = pair_metrics[pair]
+            mirrored_pair_total += metrics["mirrored_count"]
+            timing_overlap_max = max(timing_overlap_max, metrics["timing_overlap"])
+            market_overlap_max = max(market_overlap_max, metrics["market_overlap"])
+            for signal_name, matched in metrics["matches"].items():
+                if matched:
+                    signal_match_counts[signal_name] += 1
+
+        market_counter = Counter(
+            market
+            for wallet in cluster_wallets
+            for market in market_sets.get(wallet, set())
+        )
+        shared_markets = sorted(
+            market for market, count in market_counter.items() if count >= 2
+        )
+        top_market = market_counter.most_common(1)[0][0] if market_counter else "multiple"
+        matched_signals = sorted(signal_match_counts.keys())
+        cluster_id = _cluster_id(cluster_wallets)
+        risk_level = "high" if "mirrored_entries" in matched_signals else "medium"
+
+        evidence = {
+            "cluster_id": cluster_id,
+            "wallets": cluster_wallets,
+            "wallet_count": len(cluster_wallets),
+            "matched_signals": matched_signals,
+            "signal_match_counts": dict(signal_match_counts),
+            "shared_markets": shared_markets,
+            "mirrored_pair_count": mirrored_pair_total,
+            "timing_overlap_max": timing_overlap_max,
+            "market_overlap_max": market_overlap_max,
+            "window_minutes": config.cluster_window_minutes,
+            "mirrored_seconds": config.cluster_mirrored_seconds,
+        }
+
+        for wallet in cluster_wallets:
+            signals.append(
+                WalletSignal(
+                    signal_type="wallet_cluster",
+                    wallet=wallet,
+                    market_id=top_market,
+                    evidence=evidence,
+                    risk_level=risk_level,
+                    timestamp=window_end,
+                )
+            )
+
+    return signals
+
+
+def _bucket_timestamp(timestamp: datetime, bucket_seconds: int) -> int:
+    """Bucket a timestamp into fixed-size intervals."""
+    epoch_seconds = int(timestamp.timestamp())
+    return epoch_seconds - (epoch_seconds % bucket_seconds)
+
+
+def _count_mirrored_pairs(
+    trades: List[WalletTrade],
+    threshold_seconds: int,
+) -> Dict[Tuple[str, str], int]:
+    """Count mirrored entries between wallet pairs within a time threshold."""
+    grouped: Dict[Tuple[str, str], List[WalletTrade]] = defaultdict(list)
+    for trade in trades:
+        grouped[(trade.market_id, trade.side)].append(trade)
+
+    pair_counts: Dict[Tuple[str, str], int] = defaultdict(int)
+    for group_trades in grouped.values():
+        sorted_trades = sorted(group_trades, key=lambda trade: trade.timestamp)
+        for idx, trade in enumerate(sorted_trades):
+            next_idx = idx + 1
+            while next_idx < len(sorted_trades):
+                next_trade = sorted_trades[next_idx]
+                delta = (next_trade.timestamp - trade.timestamp).total_seconds()
+                if delta > threshold_seconds:
+                    break
+                if next_trade.wallet != trade.wallet:
+                    wallet_a, wallet_b = sorted((trade.wallet, next_trade.wallet))
+                    pair_counts[(wallet_a, wallet_b)] += 1
+                next_idx += 1
+    return pair_counts
+
+
+def _cluster_id(wallets: List[str]) -> str:
+    """Generate a deterministic cluster id from wallets."""
+    joined = ",".join(sorted(wallets))
+    return f"cluster-{sha1(joined.encode('utf-8')).hexdigest()[:8]}"
 
 
 def _detect_frontrun(
