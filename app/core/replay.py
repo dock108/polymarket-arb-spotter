@@ -17,14 +17,22 @@ Features:
 import time
 from datetime import datetime
 from enum import Enum
-from typing import Any, Callable, Dict, List, Optional, Union
+from typing import Any, Callable, Dict, List, Optional, Set, Union
 
 from app.core.history_store import (
     get_ticks,
     get_market_ids,
     append_backtest_result,
 )
-from app.core.logger import logger
+from app.core.logger import logger, init_db, log_wallet_alert, _DB_PATH as _ALERTS_DB_PATH
+from app.core.wallet_classifier import (
+    classify_fresh_wallet,
+    classify_high_confidence,
+    classify_whale,
+)
+from app.core.wallet_feed import _WALLET_TRADES_DB_PATH, get_wallet_trades_in_range
+from app.core.wallet_performance import evaluate_resolved_market, load_market_outcomes
+from app.core.wallet_signals import WalletSignal, WalletSignalConfig, detect_wallet_signals
 
 # Import depth scanner at module level for better performance
 try:
@@ -445,6 +453,8 @@ class BacktestEngine:
         self,
         db_path: str = "data/market_history.db",
         speed: Union[PlaybackSpeed, float] = PlaybackSpeed.JUMP_TO_EVENTS,
+        wallet_db_path: str = _WALLET_TRADES_DB_PATH,
+        alerts_db_path: str = _ALERTS_DB_PATH,
     ):
         """
         Initialize the backtest engine.
@@ -455,9 +465,16 @@ class BacktestEngine:
         """
         self.replay_engine = HistoricalReplayEngine(db_path=db_path, speed=speed)
         self.db_path = db_path
+        self.wallet_db_path = wallet_db_path
+        self.alerts_db_path = alerts_db_path
         self.arb_detector = None
         self.price_alerts = []
         self.depth_config = None
+        self.wallet_signal_config: Optional[WalletSignalConfig] = None
+        self.wallet_market_metadata: Dict[str, Dict[str, Any]] = {}
+        self.wallet_replay_enabled = False
+        self._market_outcomes: Dict[str, Dict[str, Any]] = {}
+        self._wallet_markets_evaluated: Set[str] = set()
 
         # Statistics
         self.stats = {
@@ -466,6 +483,11 @@ class BacktestEngine:
             "price_alerts_triggered": 0,
             "depth_signals": 0,
             "markets_analyzed": set(),
+            "wallet_trades_processed": 0,
+            "wallet_signals_detected": 0,
+            "wallet_alerts_logged": 0,
+            "wallet_markets_scored": 0,
+            "wallet_signals_scored": 0,
         }
 
         logger.info("BacktestEngine initialized")
@@ -510,6 +532,141 @@ class BacktestEngine:
         """
         self.depth_config = config
         logger.info("Depth scanner configured for backtest")
+
+    def enable_wallet_replay(
+        self,
+        config: Optional[WalletSignalConfig] = None,
+        market_metadata_by_id: Optional[Dict[str, Dict[str, Any]]] = None,
+    ) -> None:
+        """
+        Enable wallet activity replay during backtests.
+
+        Args:
+            config: Optional wallet signal configuration overrides.
+            market_metadata_by_id: Optional market metadata for signal heuristics.
+        """
+        self.wallet_signal_config = config or WalletSignalConfig()
+        self.wallet_market_metadata = market_metadata_by_id or {}
+        self.wallet_replay_enabled = True
+        logger.info("Wallet replay enabled for backtest")
+
+    def disable_wallet_replay(self) -> None:
+        """Disable wallet activity replay during backtests."""
+        self.wallet_replay_enabled = False
+        logger.info("Wallet replay disabled for backtest")
+
+    def _simulate_wallet_activity(
+        self,
+        market_id: str,
+        start: Optional[Union[datetime, str]] = None,
+        end: Optional[Union[datetime, str]] = None,
+        limit: Optional[int] = None,
+    ) -> None:
+        """Simulate wallet activity and generate wallet alerts."""
+        trades = get_wallet_trades_in_range(
+            market_id=market_id,
+            start=start,
+            end=end,
+            limit=limit,
+            db_path=self.wallet_db_path,
+        )
+
+        if not trades:
+            return
+
+        self.stats["wallet_trades_processed"] += len(trades)
+        signals = detect_wallet_signals(
+            trades,
+            db_path=self.wallet_db_path,
+            config=self.wallet_signal_config,
+            market_metadata_by_id=self.wallet_market_metadata,
+        )
+        if not signals:
+            return
+
+        init_db(self.alerts_db_path)
+
+        self.stats["wallet_signals_detected"] += len(signals)
+        for signal in signals:
+            log_wallet_alert(
+                self._build_wallet_alert_payload(signal),
+                db_path=self.alerts_db_path,
+            )
+            self.stats["wallet_alerts_logged"] += 1
+
+        self._evaluate_wallet_signals(market_id)
+
+    def _build_wallet_alert_payload(self, signal: WalletSignal) -> Dict[str, Any]:
+        """Build wallet alert payload for storage."""
+        return {
+            "timestamp": signal.timestamp,
+            "wallet": signal.wallet,
+            "market_id": signal.market_id,
+            "bet_size": self._extract_bet_size(signal.evidence),
+            "classification": self._classify_wallet_label(signal.wallet),
+            "signal_type": signal.signal_type,
+            "profile_url": self._wallet_profile_url(signal.wallet),
+            "evidence": signal.evidence,
+        }
+
+    def _evaluate_wallet_signals(self, market_id: str) -> None:
+        """Evaluate wallet signal outcomes if market resolution is known."""
+        if market_id in self._wallet_markets_evaluated:
+            return
+
+        outcome_info = self._market_outcomes.get(market_id)
+        if not outcome_info:
+            return
+
+        outcome = outcome_info.get("outcome")
+        if not outcome:
+            return
+
+        resolved_at = outcome_info.get("resolved_at")
+        resolved_timestamp = (
+            HistoricalReplayEngine._parse_timestamp(resolved_at)
+            if resolved_at
+            else None
+        )
+
+        summary = evaluate_resolved_market(
+            market_id=market_id,
+            outcome=outcome,
+            resolved_at=resolved_timestamp,
+            wallet_db_path=self.wallet_db_path,
+            alerts_db_path=self.alerts_db_path,
+        )
+        self.stats["wallet_markets_scored"] += 1
+        self.stats["wallet_signals_scored"] += summary.get("signals_scored", 0)
+        self._wallet_markets_evaluated.add(market_id)
+
+    @staticmethod
+    def _extract_bet_size(evidence: Dict[str, Any]) -> Optional[float]:
+        """Extract a bet size from wallet signal evidence."""
+        for key in ("size", "total_size", "bet_size"):
+            value = evidence.get(key)
+            if isinstance(value, (int, float)):
+                return float(value)
+        return None
+
+    @staticmethod
+    def _wallet_profile_url(wallet: str) -> str:
+        """Build Polymarket profile URL for wallet."""
+        if not wallet:
+            return "N/A"
+        return f"https://polymarket.com/profile/{wallet}"
+
+    def _classify_wallet_label(self, wallet: str) -> str:
+        """Classify wallet for backtest alert logging."""
+        if not wallet:
+            return "unknown"
+        if classify_fresh_wallet(wallet, db_path=self.wallet_db_path):
+            return "fresh"
+        if classify_whale(wallet, db_path=self.wallet_db_path):
+            return "whale"
+        if classify_high_confidence(wallet, db_path=self.wallet_db_path):
+            return "pro"
+        return "unknown"
 
     def _process_tick_arb_detector(self, tick: Dict[str, Any]) -> None:
         """
@@ -732,31 +889,44 @@ class BacktestEngine:
             "price_alerts_triggered": 0,
             "depth_signals": 0,
             "markets_analyzed": set(),
+            "wallet_trades_processed": 0,
+            "wallet_signals_detected": 0,
+            "wallet_alerts_logged": 0,
+            "wallet_markets_scored": 0,
+            "wallet_signals_scored": 0,
         }
 
         # Reset price alert triggered states for fresh backtest
         for alert in self.price_alerts:
             alert["triggered"] = False
 
+        if self.wallet_replay_enabled:
+            self._market_outcomes = load_market_outcomes(self.wallet_db_path)
+            self._wallet_markets_evaluated = set()
+            init_db(self.alerts_db_path)
+
         try:
             if market_ids:
-                # Replay specific markets
-                for market_id in market_ids:
-                    self.replay_engine.replay_market(
-                        market_id=market_id,
-                        start=start,
-                        end=end,
-                        on_tick=self._process_tick,
-                        limit=limit_per_market,
-                    )
+                markets_to_replay = market_ids
             else:
-                # Replay all markets
-                self.replay_engine.replay_all_markets(
+                markets_to_replay = self.replay_engine.get_available_markets()
+
+            for market_id in markets_to_replay:
+                self.replay_engine.replay_market(
+                    market_id=market_id,
                     start=start,
                     end=end,
                     on_tick=self._process_tick,
-                    limit_per_market=limit_per_market,
+                    limit=limit_per_market,
                 )
+
+                if self.wallet_replay_enabled:
+                    self._simulate_wallet_activity(
+                        market_id=market_id,
+                        start=start,
+                        end=end,
+                        limit=limit_per_market,
+                    )
 
             # Convert set to count for return value
             markets_count = len(self.stats["markets_analyzed"])
@@ -767,7 +937,8 @@ class BacktestEngine:
                 f"Backtest complete: {self.stats['ticks_processed']} ticks, "
                 f"{self.stats['arb_signals']} arb signals, "
                 f"{self.stats['price_alerts_triggered']} price alerts, "
-                f"{self.stats['depth_signals']} depth signals"
+                f"{self.stats['depth_signals']} depth signals, "
+                f"{self.stats['wallet_signals_detected']} wallet signals"
             )
 
             return return_stats
@@ -792,12 +963,19 @@ class BacktestEngine:
             "price_alerts_triggered": self.stats["price_alerts_triggered"],
             "depth_signals": self.stats["depth_signals"],
             "markets_analyzed": len(self.stats["markets_analyzed"]),
+            "wallet_trades_processed": self.stats["wallet_trades_processed"],
+            "wallet_signals_detected": self.stats["wallet_signals_detected"],
+            "wallet_alerts_logged": self.stats["wallet_alerts_logged"],
+            "wallet_markets_scored": self.stats["wallet_markets_scored"],
+            "wallet_signals_scored": self.stats["wallet_signals_scored"],
         }
 
 
 def create_backtest_engine(
     db_path: str = "data/market_history.db",
     speed: Union[PlaybackSpeed, float] = PlaybackSpeed.JUMP_TO_EVENTS,
+    wallet_db_path: str = _WALLET_TRADES_DB_PATH,
+    alerts_db_path: str = _ALERTS_DB_PATH,
 ) -> BacktestEngine:
     """
     Convenience function to create a backtest engine.
@@ -805,6 +983,8 @@ def create_backtest_engine(
     Args:
         db_path: Path to the history database file
         speed: Playback speed (default: JUMP_TO_EVENTS for fast backtesting)
+        wallet_db_path: Path to wallet trades database (for wallet replay)
+        alerts_db_path: Path to alerts database for wallet alerts
 
     Returns:
         Configured BacktestEngine instance
@@ -814,4 +994,9 @@ def create_backtest_engine(
         >>> engine.set_arb_detector(ArbitrageDetector())
         >>> results = engine.run_backtest()
     """
-    return BacktestEngine(db_path=db_path, speed=speed)
+    return BacktestEngine(
+        db_path=db_path,
+        speed=speed,
+        wallet_db_path=wallet_db_path,
+        alerts_db_path=alerts_db_path,
+    )

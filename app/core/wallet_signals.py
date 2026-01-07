@@ -28,6 +28,7 @@ class WalletSignal:
     market_id: str
     evidence: Dict[str, Any]
     risk_level: str
+    timestamp: datetime
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary representation with required keys."""
@@ -37,6 +38,7 @@ class WalletSignal:
             "market_id": self.market_id,
             "evidence": self.evidence,
             "risk_level": self.risk_level,
+            "timestamp": self.timestamp.isoformat(),
         }
 
 
@@ -127,6 +129,7 @@ def detect_wallet_signals(
                                 "total_trades": tag.metadata.get("total_trades"),
                             },
                             risk_level="high",
+                            timestamp=trade.timestamp,
                         )
                     )
                     seen_keys.add(key)
@@ -160,6 +163,7 @@ def detect_wallet_signals(
                                 "window_minutes": config.high_confidence_entry_window_minutes,
                             },
                             risk_level="high",
+                            timestamp=trade.timestamp,
                         )
                     )
                     seen_keys.add(key)
@@ -199,6 +203,7 @@ def detect_wallet_signals(
                                 "window_minutes": config.repeated_buys_window_minutes,
                             },
                             risk_level="medium",
+                            timestamp=trade.timestamp,
                         )
                     )
                     seen_keys.add(key)
@@ -232,6 +237,7 @@ def detect_wallet_signals(
                             "window_minutes": config.pile_in_window_minutes,
                         },
                         risk_level="medium",
+                        timestamp=trade.timestamp,
                     )
                 )
                 seen_keys.add(key)
@@ -374,6 +380,7 @@ def _detect_frontrun(
                 "window_minutes": window_minutes,
             },
             risk_level="high",
+            timestamp=trade.timestamp,
         )
 
     return None
