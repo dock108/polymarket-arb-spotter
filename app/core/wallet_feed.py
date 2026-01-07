@@ -277,10 +277,14 @@ class WalletFeed:
         if tx_hash in self._seen_tx_hashes:
             return True
 
-        # Check database
+        # Check database using count for efficiency
         try:
-            existing = list(db["wallet_trades"].rows_where("tx_hash = ?", [tx_hash]))
-            if existing:
+            count = db.execute(
+                "SELECT COUNT(*) FROM wallet_trades WHERE tx_hash = ? LIMIT 1",
+                [tx_hash]
+            ).fetchone()[0]
+            
+            if count > 0:
                 self._seen_tx_hashes.add(tx_hash)
                 return True
         except Exception as e:
@@ -480,8 +484,9 @@ class WalletFeed:
             f"poll_interval={poll_interval}s)"
         )
 
-        # Use a deque with maxlen for automatic size limiting
-        last_seen_tx_hashes: deque = deque(maxlen=1000)
+        # Use both a deque for ordering and a set for O(1) lookups
+        seen_hashes_deque: deque = deque(maxlen=1000)
+        seen_hashes_set: Set[str] = set()
 
         while True:
             try:
@@ -493,7 +498,7 @@ class WalletFeed:
 
                 # Process new trades
                 for trade in trades:
-                    if trade.tx_hash not in last_seen_tx_hashes:
+                    if trade.tx_hash not in seen_hashes_set:
                         # Store if enabled
                         if auto_store:
                             self.store_trade(trade)
@@ -504,8 +509,14 @@ class WalletFeed:
                         except Exception as e:
                             logger.error(f"Error in trade callback: {e}")
 
-                        # Add to seen hashes (deque automatically removes oldest when full)
-                        last_seen_tx_hashes.append(trade.tx_hash)
+                        # Add to both structures
+                        seen_hashes_deque.append(trade.tx_hash)
+                        seen_hashes_set.add(trade.tx_hash)
+                        
+                        # Remove oldest from set when deque is full
+                        if len(seen_hashes_set) > 1000:
+                            # Rebuild set from deque to stay in sync
+                            seen_hashes_set = set(seen_hashes_deque)
 
                 time.sleep(poll_interval)
 
@@ -552,7 +563,8 @@ def get_wallet_trades(
 
         # Build full query with ORDER BY and LIMIT
         query = f"""
-            SELECT * FROM wallet_trades 
+            SELECT id, wallet, market_id, side, price, size, timestamp, tx_hash
+            FROM wallet_trades 
             WHERE {where_sql}
             ORDER BY timestamp DESC
             LIMIT ?
@@ -565,11 +577,8 @@ def get_wallet_trades(
         if not rows:
             return []
 
-        # Get column names
-        columns = [
-            col[0]
-            for col in db.execute("SELECT * FROM wallet_trades LIMIT 0").description
-        ]
+        # Static column names (matching SELECT clause)
+        columns = ["id", "wallet", "market_id", "side", "price", "size", "timestamp", "tx_hash"]
 
         # Convert rows to dictionaries
         results = []
