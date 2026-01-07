@@ -20,6 +20,7 @@ import requests
 
 from app.core.config import get_config
 from app.core.logger import log_wallet_alert
+from app.core.privacy import format_wallet_address, format_wallet_profile_url
 from app.core.wallet_classifier import (
     classify_fresh_wallet,
     classify_high_confidence,
@@ -793,8 +794,8 @@ def send_wallet_alert(signal: Union["WalletSignal", Dict[str, Any]]) -> bool:
 
         bet_size = _extract_bet_size(evidence)
         classification = _classify_wallet_label(wallet)
-        wallet_short = _short_wallet_address(wallet)
-        profile_url = _wallet_profile_url(wallet)
+        wallet_short = format_wallet_address(wallet)
+        profile_url = format_wallet_profile_url(wallet)
 
         service = get_notification_service()
 
@@ -911,22 +912,6 @@ This is an automated wallet alert from Polymarket Arbitrage Spotter.
 """
 
     return message
-
-
-def _short_wallet_address(wallet: str) -> str:
-    """Shorten wallet address for display."""
-    if not wallet:
-        return "N/A"
-    if len(wallet) <= 12:
-        return wallet
-    return f"{wallet[:6]}…{wallet[-4:]}"
-
-
-def _wallet_profile_url(wallet: str) -> str:
-    """Build Polymarket profile URL for wallet."""
-    if not wallet:
-        return "N/A"
-    return f"https://polymarket.com/profile/{wallet}"
 
 
 def _extract_bet_size(evidence: Any) -> Optional[float]:

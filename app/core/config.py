@@ -65,6 +65,10 @@ class Config:
     enable_history: bool = False  # Whether to record market history
     history_sampling_ms: int = 1500  # Minimum interval between recordings (ms)
 
+    # Wallet Intelligence Configuration
+    wallet_features_enabled: bool = False  # Enable wallet intelligence views
+    do_not_expose_full_addresses: bool = True  # Mask wallet addresses in UI/alerts
+
     @classmethod
     def from_env(cls) -> "Config":
         """
@@ -97,6 +101,8 @@ class Config:
         - HIGH_CONFIDENCE_MIN_TRADES: Minimum trades for high-confidence (default: 5)
         - SUSPICIOUS_CLUSTER_MIN_WALLETS: Min fresh wallets to flag cluster (default: 3)
         - SUSPICIOUS_CLUSTER_TIME_WINDOW_HOURS: Time window for clustering (default: 24.0)
+        - WALLET_FEATURES_ENABLED: Enable wallet intelligence views (default: false)
+        - DO_NOT_EXPOSE_FULL_ADDRESSES: Mask wallet addresses in UI/alerts (default: true)
 
         Returns:
             Config instance with values loaded from environment
@@ -160,6 +166,15 @@ class Config:
             os.getenv("SUSPICIOUS_CLUSTER_TIME_WINDOW_HOURS", "24.0")
         )
 
+        wallet_features_enabled = os.getenv("WALLET_FEATURES_ENABLED", "false").lower() in (
+            "true",
+            "1",
+            "yes",
+        )
+        do_not_expose_full_addresses = os.getenv(
+            "DO_NOT_EXPOSE_FULL_ADDRESSES", "true"
+        ).lower() in ("true", "1", "yes")
+
         # Create config instance
         config = cls(
             api_endpoint=api_endpoint,
@@ -190,6 +205,8 @@ class Config:
             high_confidence_min_trades=high_confidence_min_trades,
             suspicious_cluster_min_wallets=suspicious_cluster_min_wallets,
             suspicious_cluster_time_window_hours=suspicious_cluster_time_window_hours,
+            wallet_features_enabled=wallet_features_enabled,
+            do_not_expose_full_addresses=do_not_expose_full_addresses,
         )
 
         # Validate and log configuration

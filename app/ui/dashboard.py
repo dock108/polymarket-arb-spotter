@@ -14,6 +14,7 @@ import streamlit as st
 from app.core.arb_detector import ArbitrageDetector
 from app.core.history_recorder import record_market_tick
 from app.core.logger import fetch_recent, logger
+from app.core.config import config
 from app.core.mock_data import MockDataGenerator
 from app.ui.depth_view import render_depth_view
 from app.ui.history_view import render_history_view
@@ -39,19 +40,24 @@ def render_dashboard():
 
     # Sidebar navigation
     st.sidebar.title("📊 Navigation")
-    page = st.sidebar.radio(
-        "Go to",
-        [
-            "Dashboard",
-            "Pattern Insights",
-            "History",
-            "Replay & Label",
-            "Depth Monitor",
-            "Price Alerts",
-            "Wallet Intelligence",
-            "Settings",
-        ],
-    )
+    pages = [
+        "Dashboard",
+        "Pattern Insights",
+        "History",
+        "Replay & Label",
+        "Depth Monitor",
+        "Price Alerts",
+        "Settings",
+    ]
+    if config.wallet_features_enabled:
+        pages.insert(6, "Wallet Intelligence")
+    else:
+        st.sidebar.caption(
+            "Wallet intelligence is disabled. Set WALLET_FEATURES_ENABLED=true "
+            "to enable."
+        )
+
+    page = st.sidebar.radio("Go to", pages)
 
     # Mode toggle in sidebar
     st.sidebar.markdown("---")
