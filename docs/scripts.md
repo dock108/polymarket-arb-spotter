@@ -72,6 +72,40 @@ Shows integration with the arbitrage detector, demonstrating how to send notific
 
 ---
 
+#### 📊 example_event_correlation.py - Pattern Analysis
+
+**Purpose:** Demonstrates the event correlation analyzer for computing statistics from market patterns.
+
+**Usage:**
+```bash
+python scripts/example_event_correlation.py
+```
+
+**Description:**
+Shows how to use the EventCorrelationAnalyzer to compute descriptive statistics from historical market data and user labels, helping understand pattern performance and characteristics.
+
+---
+
+#### 🔍 example_interesting_moments.py - Interesting Moments Finder
+
+**Purpose:** Demonstrates automated detection of timestamps worth reviewing during analysis.
+
+**Usage:**
+```bash
+python scripts/example_interesting_moments.py
+```
+
+**Description:**
+Shows how to use the InterestingMomentsFinder to automatically detect:
+- Sudden price accelerations
+- Abnormal volume clusters
+- Imbalance reversals
+- Repeated alert firing
+
+This saves massive time during analysis by highlighting review candidates and prioritizing them by severity.
+
+---
+
 ## Configuration
 
 All scripts use the global configuration from `.env` file. See the main README.md for configuration details.

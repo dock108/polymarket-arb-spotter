@@ -16,6 +16,8 @@ from app.core.patterns import (
     SignalOutcome,
     CorrelationSummary,
     create_analyzer,
+    InterestingMomentsFinder,
+    InterestingMoment,
 )
 from app.core.history_store import append_ticks
 from app.core.logger import save_history_label
@@ -408,7 +410,8 @@ class TestEventCorrelationAnalyzer(unittest.TestCase):
         # Should be either tick at minute 2 or 3
         closest_time = self.analyzer._parse_timestamp(closest["timestamp"])
         self.assertIn(
-            closest_time, [base_time + timedelta(minutes=2), base_time + timedelta(minutes=3)]
+            closest_time,
+            [base_time + timedelta(minutes=2), base_time + timedelta(minutes=3)],
         )
 
     def test_find_price_at_offset(self):
@@ -546,6 +549,349 @@ class TestIntegrationScenarios(unittest.TestCase):
 
         # Verify resolution curve exists
         self.assertGreater(len(summary.time_to_resolution_curve), 0)
+
+
+class TestInterestingMomentsFinder(unittest.TestCase):
+    """Test interesting moments finder functionality."""
+
+    def setUp(self):
+        """Set up test databases for each test."""
+        self.test_dir = tempfile.mkdtemp()
+        self.history_db_path = os.path.join(self.test_dir, "test_history.db")
+        self.labels_db_path = os.path.join(self.test_dir, "test_labels.db")
+
+        self.finder = InterestingMomentsFinder(
+            history_db_path=self.history_db_path,
+            labels_db_path=self.labels_db_path,
+            price_acceleration_threshold=0.05,
+            volume_spike_multiplier=3.0,
+            imbalance_threshold=0.15,
+        )
+
+    def tearDown(self):
+        """Clean up test databases after each test."""
+        if os.path.exists(self.test_dir):
+            shutil.rmtree(self.test_dir)
+
+    def test_finder_initialization(self):
+        """Test finder initialization."""
+        self.assertIsNotNone(self.finder)
+        self.assertEqual(self.finder.price_acceleration_threshold, 0.05)
+        self.assertEqual(self.finder.volume_spike_multiplier, 3.0)
+
+    def test_create_moments_finder_convenience_function(self):
+        """Test create_moments_finder convenience function."""
+        from app.core.patterns import create_moments_finder
+
+        finder = create_moments_finder(
+            history_db_path=self.history_db_path,
+            labels_db_path=self.labels_db_path,
+            price_acceleration_threshold=0.10,
+        )
+
+        self.assertIsNotNone(finder)
+        self.assertIsInstance(finder, InterestingMomentsFinder)
+        self.assertEqual(finder.price_acceleration_threshold, 0.10)
+
+    def test_find_interesting_moments_empty_data(self):
+        """Test finder with no data."""
+        moments = self.finder.find_interesting_moments()
+        self.assertEqual(len(moments), 0)
+
+    def test_detect_price_accelerations(self):
+        """Test detection of sudden price accelerations."""
+        base_time = datetime(2024, 1, 1, 12, 0, 0)
+
+        # Create data with a price spike
+        ticks = []
+        for i in range(30):
+            if i < 10:
+                price = 0.50  # Stable
+            elif i < 15:
+                # Sharp acceleration (10% in 5 ticks)
+                price = 0.50 + (i - 10) * 0.02
+            else:
+                price = 0.60  # Stable at new level
+
+            ticks.append(
+                {
+                    "market_id": "test_market_1",
+                    "timestamp": (base_time + timedelta(minutes=i)).isoformat(),
+                    "yes_price": price,
+                    "no_price": 1.0 - price,
+                    "volume": 1000.0,
+                }
+            )
+
+        append_ticks(ticks, db_path=self.history_db_path)
+
+        # Detect price accelerations
+        moments = self.finder._detect_price_accelerations(
+            "test_market_1", base_time.isoformat(), None
+        )
+
+        # Should find at least one price acceleration
+        self.assertGreater(len(moments), 0)
+
+        # Check properties of detected moments
+        for moment in moments:
+            self.assertEqual(moment.moment_type, "price_acceleration")
+            self.assertGreater(moment.severity, 0)
+            self.assertIn("price_change", moment.metrics)
+
+    def test_detect_volume_spikes(self):
+        """Test detection of abnormal volume clusters."""
+        base_time = datetime(2024, 1, 1, 12, 0, 0)
+
+        # Create data with volume spike
+        ticks = []
+        for i in range(30):
+            if i == 15:
+                # Volume spike at minute 15
+                volume = 5000.0
+            else:
+                volume = 1000.0
+
+            ticks.append(
+                {
+                    "market_id": "test_market_2",
+                    "timestamp": (base_time + timedelta(minutes=i)).isoformat(),
+                    "yes_price": 0.50,
+                    "no_price": 0.50,
+                    "volume": volume,
+                }
+            )
+
+        append_ticks(ticks, db_path=self.history_db_path)
+
+        # Detect volume spikes
+        moments = self.finder._detect_volume_spikes(
+            "test_market_2", base_time.isoformat(), None
+        )
+
+        # Should find the volume spike
+        self.assertGreater(len(moments), 0)
+
+        # Check properties
+        spike_moment = moments[0]
+        self.assertEqual(spike_moment.moment_type, "volume_spike")
+        self.assertGreater(spike_moment.severity, 0)
+        self.assertIn("volume_ratio", spike_moment.metrics)
+        self.assertGreater(spike_moment.metrics["volume_ratio"], 3.0)
+
+    def test_detect_imbalance_reversals(self):
+        """Test detection of imbalance reversals."""
+        base_time = datetime(2024, 1, 1, 12, 0, 0)
+
+        # Create data with imbalance reversal
+        ticks = []
+        for i in range(30):
+            if i < 10:
+                # Heavy yes (imbalanced)
+                price = 0.70
+            elif i < 15:
+                # Transition through middle
+                price = 0.70 - (i - 10) * 0.08
+            else:
+                # Heavy no (reversed imbalance)
+                price = 0.30
+
+            ticks.append(
+                {
+                    "market_id": "test_market_3",
+                    "timestamp": (base_time + timedelta(minutes=i)).isoformat(),
+                    "yes_price": price,
+                    "no_price": 1.0 - price,
+                    "volume": 1000.0,
+                }
+            )
+
+        append_ticks(ticks, db_path=self.history_db_path)
+
+        # Detect imbalance reversals
+        moments = self.finder._detect_imbalance_reversals(
+            "test_market_3", base_time.isoformat(), None
+        )
+
+        # Should find the reversal
+        self.assertGreater(len(moments), 0)
+
+        # Check properties
+        reversal_moment = moments[0]
+        self.assertEqual(reversal_moment.moment_type, "imbalance_reversal")
+        self.assertGreater(reversal_moment.severity, 0)
+        self.assertIn("price", reversal_moment.metrics)
+
+    def test_detect_alert_clusters(self):
+        """Test detection of repeated alert firing."""
+        base_time = datetime(2024, 1, 1, 12, 0, 0)
+
+        # Create minimal tick data
+        ticks = [
+            {
+                "market_id": "test_market_4",
+                "timestamp": (base_time + timedelta(minutes=i)).isoformat(),
+                "yes_price": 0.50,
+                "no_price": 0.50,
+                "volume": 1000.0,
+            }
+            for i in range(10)
+        ]
+        append_ticks(ticks, db_path=self.history_db_path)
+
+        # Create cluster of alerts within short time window
+        for i in range(5):
+            save_history_label(
+                {
+                    "timestamp": (base_time + timedelta(minutes=i)).isoformat(),
+                    "market_id": "test_market_4",
+                    "label_type": "whale entry",
+                    "notes": f"Alert {i}",
+                },
+                db_path=self.labels_db_path,
+            )
+
+        # Detect alert clusters
+        moments = self.finder._detect_alert_clusters(
+            "test_market_4", base_time.isoformat(), None
+        )
+
+        # Should find the cluster
+        self.assertGreater(len(moments), 0)
+
+        # Check properties
+        cluster_moment = moments[0]
+        self.assertEqual(cluster_moment.moment_type, "alert_cluster")
+        self.assertGreater(cluster_moment.severity, 0)
+        self.assertIn("alert_count", cluster_moment.metrics)
+        self.assertGreaterEqual(cluster_moment.metrics["alert_count"], 3)
+
+    def test_find_interesting_moments_integration(self):
+        """Test complete workflow of finding interesting moments."""
+        base_time = datetime(2024, 1, 1, 12, 0, 0)
+
+        # Create comprehensive test data with multiple interesting moments
+        ticks = []
+        for i in range(60):
+            # Price spike at minute 10
+            if i < 10:
+                price = 0.50
+                volume = 1000.0
+            elif i < 15:
+                price = 0.50 + (i - 10) * 0.02  # Price acceleration
+                volume = 4000.0  # Volume spike
+            else:
+                price = 0.60
+                volume = 1000.0
+
+            ticks.append(
+                {
+                    "market_id": "integration_market",
+                    "timestamp": (base_time + timedelta(minutes=i)).isoformat(),
+                    "yes_price": price,
+                    "no_price": 1.0 - price,
+                    "volume": volume,
+                }
+            )
+
+        append_ticks(ticks, db_path=self.history_db_path)
+
+        # Add some labels
+        for i in range(3):
+            save_history_label(
+                {
+                    "timestamp": (base_time + timedelta(minutes=10 + i)).isoformat(),
+                    "market_id": "integration_market",
+                    "label_type": "whale entry",
+                    "notes": f"Alert {i}",
+                },
+                db_path=self.labels_db_path,
+            )
+
+        # Find all interesting moments
+        moments = self.finder.find_interesting_moments(
+            market_id="integration_market",
+            min_severity=0.0,  # Get all moments
+        )
+
+        # Should find multiple types of interesting moments
+        self.assertGreater(len(moments), 0)
+
+        # Check that moments are sorted by severity
+        severities = [m.severity for m in moments]
+        self.assertEqual(severities, sorted(severities, reverse=True))
+
+        # Check that we found different types
+        moment_types = set(m.moment_type for m in moments)
+        self.assertGreater(len(moment_types), 0)
+
+    def test_interesting_moment_to_dict(self):
+        """Test InterestingMoment conversion to dictionary."""
+        moment = InterestingMoment(
+            timestamp="2024-01-01T12:00:00",
+            market_id="test_market",
+            moment_type="price_acceleration",
+            reason="Test reason",
+            severity=0.75,
+            metrics={"price_change": 0.10},
+        )
+
+        result = moment.to_dict()
+
+        self.assertEqual(result["timestamp"], "2024-01-01T12:00:00")
+        self.assertEqual(result["market_id"], "test_market")
+        self.assertEqual(result["moment_type"], "price_acceleration")
+        self.assertEqual(result["reason"], "Test reason")
+        self.assertEqual(result["severity"], 0.75)
+        self.assertEqual(result["metrics"]["price_change"], 0.10)
+
+    def test_severity_filtering(self):
+        """Test that min_severity filtering works correctly."""
+        base_time = datetime(2024, 1, 1, 12, 0, 0)
+
+        # Create data with small price change (low severity)
+        ticks = []
+        for i in range(20):
+            # Small price change
+            price = 0.50 + i * 0.001
+
+            ticks.append(
+                {
+                    "market_id": "severity_test",
+                    "timestamp": (base_time + timedelta(minutes=i)).isoformat(),
+                    "yes_price": price,
+                    "no_price": 1.0 - price,
+                    "volume": 1000.0,
+                }
+            )
+
+        append_ticks(ticks, db_path=self.history_db_path)
+
+        # Add a label for market discovery
+        save_history_label(
+            {
+                "timestamp": base_time.isoformat(),
+                "market_id": "severity_test",
+                "label_type": "test",
+                "notes": "test",
+            },
+            db_path=self.labels_db_path,
+        )
+
+        # Find with high severity threshold
+        high_severity_moments = self.finder.find_interesting_moments(
+            market_id="severity_test",
+            min_severity=0.8,
+        )
+
+        # Find with low severity threshold
+        low_severity_moments = self.finder.find_interesting_moments(
+            market_id="severity_test",
+            min_severity=0.0,
+        )
+
+        # Should have fewer or equal high severity moments
+        self.assertLessEqual(len(high_severity_moments), len(low_severity_moments))
 
 
 if __name__ == "__main__":

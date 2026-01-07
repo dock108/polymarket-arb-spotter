@@ -10,7 +10,7 @@ Takes historical market data + user labels to compute descriptive statistics:
 No ML - just descriptive stats to help understand pattern performance.
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional, Tuple
 from collections import defaultdict
@@ -108,6 +108,39 @@ class SignalOutcome:
             "volume_before": self.volume_before,
             "volume_after": self.volume_after,
             "was_profitable": self.was_profitable,
+        }
+
+
+@dataclass
+class InterestingMoment:
+    """
+    Represents a timestamp that is potentially interesting for review.
+
+    Attributes:
+        timestamp: When the interesting moment occurred
+        market_id: Market identifier
+        moment_type: Type of interesting moment (e.g., "price_acceleration", "volume_spike")
+        reason: Human-readable explanation of why this moment is interesting
+        severity: Severity score (0.0-1.0, higher = more interesting)
+        metrics: Dictionary of relevant metrics (e.g., price_change, volume_ratio)
+    """
+
+    timestamp: str
+    market_id: str
+    moment_type: str
+    reason: str
+    severity: float
+    metrics: Dict[str, float] = field(default_factory=dict)
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert interesting moment to dictionary."""
+        return {
+            "timestamp": self.timestamp,
+            "market_id": self.market_id,
+            "moment_type": self.moment_type,
+            "reason": self.reason,
+            "severity": self.severity,
+            "metrics": self.metrics,
         }
 
 
@@ -228,7 +261,9 @@ class EventCorrelationAnalyzer:
 
         # Filter by label type if specified
         if label_types:
-            labels = [label for label in labels if label.get("label_type") in label_types]
+            labels = [
+                label for label in labels if label.get("label_type") in label_types
+            ]
 
         logger.info(f"Analyzing {len(labels)} labels")
 
@@ -248,7 +283,9 @@ class EventCorrelationAnalyzer:
         pattern_stats = self._aggregate_pattern_statistics(signal_outcomes, labels)
 
         # Compute overall false positive rate
-        false_signals = [label for label in labels if label.get("label_type") == "false signal"]
+        false_signals = [
+            label for label in labels if label.get("label_type") == "false signal"
+        ]
         overall_fp_rate = len(false_signals) / len(labels) if labels else 0.0
 
         # Compute time-to-resolution curve
@@ -320,7 +357,9 @@ class EventCorrelationAnalyzer:
             )
 
             # Compute average volume after signal
-            after_ticks = [t for t in ticks if self._parse_timestamp(t["timestamp"]) > signal_time]
+            after_ticks = [
+                t for t in ticks if self._parse_timestamp(t["timestamp"]) > signal_time
+            ]
             avg_volume_after = (
                 statistics.mean([t.get("volume", 0.0) for t in after_ticks])
                 if after_ticks
@@ -347,7 +386,8 @@ class EventCorrelationAnalyzer:
 
         except Exception as e:
             logger.error(
-                f"Error computing signal outcome for label {label.get('id')}: {e}", exc_info=True
+                f"Error computing signal outcome for label {label.get('id')}: {e}",
+                exc_info=True,
             )
             return None
 
@@ -409,7 +449,9 @@ class EventCorrelationAnalyzer:
                 if abs(price - prev_price) < self.price_stability_threshold:
                     stability_count += 1
                     if stability_count >= self.stability_consecutive_ticks:
-                        time_to_resolution = (tick_time - signal_time).total_seconds() / 60
+                        time_to_resolution = (
+                            tick_time - signal_time
+                        ).total_seconds() / 60
                 else:
                     stability_count = 0
 
@@ -458,11 +500,15 @@ class EventCorrelationAnalyzer:
                 for o in pattern_outcomes
                 if o.time_to_resolution_minutes is not None
             ]
-            avg_resolution = statistics.mean(resolution_times) if resolution_times else 0.0
+            avg_resolution = (
+                statistics.mean(resolution_times) if resolution_times else 0.0
+            )
 
             # Compute positive outcome rate (price went up)
             positive_outcomes = sum(1 for o in pattern_outcomes if o.max_price_move > 0)
-            positive_rate = positive_outcomes / len(pattern_outcomes) if pattern_outcomes else 0.0
+            positive_rate = (
+                positive_outcomes / len(pattern_outcomes) if pattern_outcomes else 0.0
+            )
 
             # Compute false positive rate for this pattern
             # (based on labels marked as "false signal" with notes mentioning this pattern)
@@ -473,11 +519,19 @@ class EventCorrelationAnalyzer:
                 if label.get("label_type") == "false signal"
                 and pattern_type.lower() in label.get("notes", "").lower()
             )
-            fp_rate = false_positives / total_pattern_labels if total_pattern_labels > 0 else 0.0
+            fp_rate = (
+                false_positives / total_pattern_labels
+                if total_pattern_labels > 0
+                else 0.0
+            )
 
             # Compute average volume change
-            volume_changes = [o.volume_after - o.volume_before for o in pattern_outcomes]
-            avg_volume_change = statistics.mean(volume_changes) if volume_changes else 0.0
+            volume_changes = [
+                o.volume_after - o.volume_before for o in pattern_outcomes
+            ]
+            avg_volume_change = (
+                statistics.mean(volume_changes) if volume_changes else 0.0
+            )
 
             # Get sample timestamps
             sample_timestamps = [o.signal_timestamp for o in pattern_outcomes[:5]]
@@ -495,7 +549,9 @@ class EventCorrelationAnalyzer:
 
         return pattern_stats
 
-    def _compute_resolution_curve(self, outcomes: List[SignalOutcome]) -> List[Tuple[int, float]]:
+    def _compute_resolution_curve(
+        self, outcomes: List[SignalOutcome]
+    ) -> List[Tuple[int, float]]:
         """
         Compute time-to-resolution cumulative curve.
 
@@ -569,6 +625,444 @@ class EventCorrelationAnalyzer:
             return None
 
 
+class InterestingMomentsFinder:
+    """
+    Automated detector for timestamps likely worth review.
+
+    Identifies interesting moments in market data:
+    - Sudden price acceleration
+    - Abnormal volume clusters
+    - Imbalance reversals
+    - Repeated alert firing
+
+    This saves time during analysis by highlighting key review candidates.
+    """
+
+    # Severity calculation constants
+    PRICE_SEVERITY_MULTIPLIER = 2  # For normalizing price acceleration severity
+    IMBALANCE_SWING_NORMALIZER = 0.3  # 30% swing for max severity
+    ALERT_CLUSTER_SEVERITY_MULTIPLIER = 2  # For normalizing cluster size severity
+
+    def __init__(
+        self,
+        history_db_path: str = _HISTORY_DB_PATH,
+        labels_db_path: str = _DB_PATH,
+        price_acceleration_threshold: float = 0.05,  # 5% price change in short window
+        volume_spike_multiplier: float = 3.0,  # 3x normal volume
+        imbalance_threshold: float = 0.15,  # 15% from 0.5 midpoint
+        alert_clustering_window_minutes: int = 5,  # Alerts within 5 minutes
+        min_alert_cluster_size: int = 3,  # At least 3 alerts
+    ):
+        """
+        Initialize the interesting moments finder.
+
+        Args:
+            history_db_path: Path to market history database
+            labels_db_path: Path to labels database
+            price_acceleration_threshold: Minimum price change to consider
+                acceleration (default: 0.05 = 5%)
+            volume_spike_multiplier: Volume multiplier over baseline to flag
+                spike (default: 3.0)
+            imbalance_threshold: Distance from 0.5 to consider imbalanced
+                (default: 0.15)
+            alert_clustering_window_minutes: Time window for clustering alerts
+                (default: 5)
+            min_alert_cluster_size: Minimum alerts in window to flag cluster (default: 3)
+        """
+        self.history_db_path = history_db_path
+        self.labels_db_path = labels_db_path
+        self.price_acceleration_threshold = price_acceleration_threshold
+        self.volume_spike_multiplier = volume_spike_multiplier
+        self.imbalance_threshold = imbalance_threshold
+        self.alert_clustering_window_minutes = alert_clustering_window_minutes
+        self.min_alert_cluster_size = min_alert_cluster_size
+
+        logger.info(
+            f"InterestingMomentsFinder initialized: "
+            f"price_threshold={price_acceleration_threshold}, "
+            f"volume_multiplier={volume_spike_multiplier}, "
+            f"imbalance_threshold={imbalance_threshold}"
+        )
+
+    def find_interesting_moments(
+        self,
+        market_id: Optional[str] = None,
+        start: Optional[str] = None,
+        end: Optional[str] = None,
+        min_severity: float = 0.5,
+    ) -> List[InterestingMoment]:
+        """
+        Find all interesting moments in the specified time range.
+
+        Args:
+            market_id: Optional market ID to filter analysis
+            start: Optional start timestamp (ISO format)
+            end: Optional end timestamp (ISO format)
+            min_severity: Minimum severity to include in results (0.0-1.0, default: 0.5)
+
+        Returns:
+            List of InterestingMoment objects sorted by severity (highest first)
+        """
+        logger.info(
+            f"Finding interesting moments: market={market_id}, start={start}, end={end}"
+        )
+
+        all_moments = []
+
+        # Get markets to analyze
+        if market_id:
+            markets = [market_id]
+        else:
+            # Fetch labels to discover markets
+            labels = fetch_history_labels(
+                start=start, end=end, limit=10000, db_path=self.labels_db_path
+            )
+            markets = (
+                list(set(label["market_id"] for label in labels)) if labels else []
+            )
+
+        for mkt_id in markets:
+            # Detect price accelerations
+            all_moments.extend(self._detect_price_accelerations(mkt_id, start, end))
+
+            # Detect volume spikes
+            all_moments.extend(self._detect_volume_spikes(mkt_id, start, end))
+
+            # Detect imbalance reversals
+            all_moments.extend(self._detect_imbalance_reversals(mkt_id, start, end))
+
+        # Detect repeated alert firing across all markets
+        all_moments.extend(self._detect_alert_clusters(market_id, start, end))
+
+        # Filter by severity and sort
+        interesting = [m for m in all_moments if m.severity >= min_severity]
+        interesting.sort(key=lambda m: m.severity, reverse=True)
+
+        logger.info(
+            f"Found {len(interesting)} interesting moments "
+            f"(out of {len(all_moments)} total candidates)"
+        )
+
+        return interesting
+
+    def _detect_price_accelerations(
+        self,
+        market_id: str,
+        start: Optional[str],
+        end: Optional[str],
+    ) -> List[InterestingMoment]:
+        """
+        Detect sudden price accelerations.
+
+        Looks for rapid price changes over short time windows that exceed threshold.
+        """
+        moments = []
+
+        try:
+            ticks = get_ticks(
+                market_id=market_id,
+                start=start,
+                end=end,
+                limit=10000,
+                db_path=self.history_db_path,
+            )
+
+            if len(ticks) < 2:
+                return moments
+
+            # Use a sliding window to detect acceleration
+            window_size = 5  # Compare over 5-tick windows
+            for i in range(len(ticks) - window_size):
+                window_start = ticks[i]
+                window_end = ticks[i + window_size]
+
+                price_change = abs(window_end["yes_price"] - window_start["yes_price"])
+
+                if price_change >= self.price_acceleration_threshold:
+                    # Calculate severity based on how much it exceeds threshold
+                    severity = min(
+                        1.0,
+                        price_change
+                        / (
+                            self.price_acceleration_threshold
+                            * self.PRICE_SEVERITY_MULTIPLIER
+                        ),
+                    )
+
+                    moments.append(
+                        InterestingMoment(
+                            timestamp=window_end["timestamp"],
+                            market_id=market_id,
+                            moment_type="price_acceleration",
+                            reason=f"Price moved {price_change:.2%} in short window",
+                            severity=severity,
+                            metrics={
+                                "price_change": price_change,
+                                "start_price": window_start["yes_price"],
+                                "end_price": window_end["yes_price"],
+                            },
+                        )
+                    )
+
+        except Exception as e:
+            logger.error(
+                f"Error detecting price accelerations for {market_id}: {e}",
+                exc_info=True,
+            )
+
+        return moments
+
+    def _detect_volume_spikes(
+        self,
+        market_id: str,
+        start: Optional[str],
+        end: Optional[str],
+    ) -> List[InterestingMoment]:
+        """
+        Detect abnormal volume clusters.
+
+        Identifies periods where volume significantly exceeds baseline.
+        """
+        moments = []
+
+        try:
+            ticks = get_ticks(
+                market_id=market_id,
+                start=start,
+                end=end,
+                limit=10000,
+                db_path=self.history_db_path,
+            )
+
+            if len(ticks) < 10:
+                return moments
+
+            # Calculate baseline volume (median of all volumes)
+            volumes = [tick.get("volume", 0.0) for tick in ticks]
+            baseline_volume = statistics.median(volumes) if volumes else 0.0
+
+            if baseline_volume == 0:
+                return moments
+
+            # Look for spikes
+            for tick in ticks:
+                volume = tick.get("volume", 0.0)
+                if volume >= baseline_volume * self.volume_spike_multiplier:
+                    volume_ratio = volume / baseline_volume
+                    # Calculate severity based on how much it exceeds threshold
+                    severity = min(
+                        1.0,
+                        (volume_ratio - self.volume_spike_multiplier)
+                        / self.volume_spike_multiplier,
+                    )
+
+                    moments.append(
+                        InterestingMoment(
+                            timestamp=tick["timestamp"],
+                            market_id=market_id,
+                            moment_type="volume_spike",
+                            reason=f"Volume spike {volume_ratio:.1f}x baseline",
+                            severity=severity,
+                            metrics={
+                                "volume": volume,
+                                "baseline_volume": baseline_volume,
+                                "volume_ratio": volume_ratio,
+                            },
+                        )
+                    )
+
+        except Exception as e:
+            logger.error(
+                f"Error detecting volume spikes for {market_id}: {e}",
+                exc_info=True,
+            )
+
+        return moments
+
+    def _detect_imbalance_reversals(
+        self,
+        market_id: str,
+        start: Optional[str],
+        end: Optional[str],
+    ) -> List[InterestingMoment]:
+        """
+        Detect imbalance reversals.
+
+        Identifies when markets transition from one side being heavily favored
+        to the other side being heavily favored (crosses through 0.5).
+        """
+        moments = []
+
+        try:
+            ticks = get_ticks(
+                market_id=market_id,
+                start=start,
+                end=end,
+                limit=10000,
+                db_path=self.history_db_path,
+            )
+
+            if len(ticks) < 2:
+                return moments
+
+            # Track last known imbalance state (ignoring neutral periods)
+            last_imbalanced_yes = None
+
+            for i, tick in enumerate(ticks):
+                price = tick["yes_price"]
+
+                # Check if currently imbalanced
+                if price >= 0.5 + self.imbalance_threshold:
+                    current_imbalanced_yes = True
+                elif price <= 0.5 - self.imbalance_threshold:
+                    current_imbalanced_yes = False
+                else:
+                    current_imbalanced_yes = None
+
+                # Detect reversal (from one side to the other)
+                # Only compare when we have a new imbalanced state
+                if current_imbalanced_yes is not None:
+                    if (
+                        last_imbalanced_yes is not None
+                        and last_imbalanced_yes != current_imbalanced_yes
+                    ):
+                        # Calculate how far it swung
+                        swing_magnitude = abs(price - 0.5) + self.imbalance_threshold
+                        severity = min(
+                            1.0, swing_magnitude / self.IMBALANCE_SWING_NORMALIZER
+                        )
+
+                        moments.append(
+                            InterestingMoment(
+                                timestamp=tick["timestamp"],
+                                market_id=market_id,
+                                moment_type="imbalance_reversal",
+                                reason=f"Market imbalance reversed (price: {price:.2%})",
+                                severity=severity,
+                                metrics={
+                                    "price": price,
+                                    "distance_from_middle": abs(price - 0.5),
+                                },
+                            )
+                        )
+
+                    # Update last known imbalanced state
+                    last_imbalanced_yes = current_imbalanced_yes
+
+        except Exception as e:
+            logger.error(
+                f"Error detecting imbalance reversals for {market_id}: {e}",
+                exc_info=True,
+            )
+
+        return moments
+
+    def _detect_alert_clusters(
+        self,
+        market_id: Optional[str],
+        start: Optional[str],
+        end: Optional[str],
+    ) -> List[InterestingMoment]:
+        """
+        Detect repeated alert firing.
+
+        Identifies time windows where multiple alerts fire in quick succession,
+        suggesting significant market activity.
+        """
+        moments = []
+
+        try:
+            # Fetch all labels in the time range
+            labels = fetch_history_labels(
+                market_id=market_id,
+                start=start,
+                end=end,
+                limit=10000,
+                db_path=self.labels_db_path,
+            )
+
+            if len(labels) < self.min_alert_cluster_size:
+                return moments
+
+            # Parse timestamps and sort
+            labeled_events = []
+            for label in labels:
+                ts = self._parse_timestamp(label["timestamp"])
+                if ts:
+                    labeled_events.append((ts, label))
+
+            labeled_events.sort(key=lambda x: x[0])
+
+            # Use sliding window to find clusters
+            window = timedelta(minutes=self.alert_clustering_window_minutes)
+
+            for i in range(len(labeled_events)):
+                window_start_time, start_label = labeled_events[i]
+                window_end_time = window_start_time + window
+
+                # Count events in window
+                events_in_window = []
+                for j in range(i, len(labeled_events)):
+                    event_time, event_label = labeled_events[j]
+                    if event_time <= window_end_time:
+                        events_in_window.append(event_label)
+                    else:
+                        break
+
+                # Check if cluster size meets threshold
+                if len(events_in_window) >= self.min_alert_cluster_size:
+                    # Calculate severity based on cluster size
+                    severity = min(
+                        1.0,
+                        len(events_in_window)
+                        / (
+                            self.min_alert_cluster_size
+                            * self.ALERT_CLUSTER_SEVERITY_MULTIPLIER
+                        ),
+                    )
+
+                    # Get unique label types in cluster
+                    label_types = set(e["label_type"] for e in events_in_window)
+
+                    reason = (
+                        f"{len(events_in_window)} alerts fired within "
+                        f"{self.alert_clustering_window_minutes}m"
+                    )
+
+                    moments.append(
+                        InterestingMoment(
+                            timestamp=start_label["timestamp"],
+                            market_id=start_label["market_id"],
+                            moment_type="alert_cluster",
+                            reason=reason,
+                            severity=severity,
+                            metrics={
+                                "alert_count": len(events_in_window),
+                                "unique_alert_types": len(label_types),
+                            },
+                        )
+                    )
+
+        except Exception as e:
+            logger.error(
+                f"Error detecting alert clusters: {e}",
+                exc_info=True,
+            )
+
+        return moments
+
+    @staticmethod
+    def _parse_timestamp(timestamp: str) -> Optional[datetime]:
+        """Parse ISO format timestamp string to datetime."""
+        try:
+            # Handle UTC 'Z' suffix by replacing only at the end
+            if timestamp.endswith("Z"):
+                timestamp = timestamp[:-1] + "+00:00"
+            return datetime.fromisoformat(timestamp)
+        except (ValueError, AttributeError):
+            return None
+
+
 def create_analyzer(
     history_db_path: str = _HISTORY_DB_PATH,
     labels_db_path: str = _DB_PATH,
@@ -603,4 +1097,46 @@ def create_analyzer(
         price_stability_threshold=price_stability_threshold,
         profitable_threshold=profitable_threshold,
         stability_consecutive_ticks=stability_consecutive_ticks,
+    )
+
+
+def create_moments_finder(
+    history_db_path: str = _HISTORY_DB_PATH,
+    labels_db_path: str = _DB_PATH,
+    price_acceleration_threshold: float = 0.05,
+    volume_spike_multiplier: float = 3.0,
+    imbalance_threshold: float = 0.15,
+    alert_clustering_window_minutes: int = 5,
+    min_alert_cluster_size: int = 3,
+) -> InterestingMomentsFinder:
+    """
+    Convenience function to create an interesting moments finder.
+
+    Args:
+        history_db_path: Path to market history database
+        labels_db_path: Path to labels database
+        price_acceleration_threshold: Minimum price change to consider acceleration
+        volume_spike_multiplier: Volume multiplier over baseline to flag spike
+        imbalance_threshold: Distance from 0.5 to consider imbalanced
+        alert_clustering_window_minutes: Time window for clustering alerts
+        min_alert_cluster_size: Minimum alerts in window to flag cluster
+
+    Returns:
+        Configured InterestingMomentsFinder instance
+
+    Example:
+        >>> finder = create_moments_finder()
+        >>> moments = finder.find_interesting_moments(market_id="market_123")
+        >>> print(f"Found {len(moments)} interesting moments")
+        >>> for moment in moments[:5]:
+        ...     print(f"{moment.moment_type}: {moment.reason} (severity: {moment.severity:.2f})")
+    """
+    return InterestingMomentsFinder(
+        history_db_path=history_db_path,
+        labels_db_path=labels_db_path,
+        price_acceleration_threshold=price_acceleration_threshold,
+        volume_spike_multiplier=volume_spike_multiplier,
+        imbalance_threshold=imbalance_threshold,
+        alert_clustering_window_minutes=alert_clustering_window_minutes,
+        min_alert_cluster_size=min_alert_cluster_size,
     )
