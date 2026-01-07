@@ -37,6 +37,14 @@ class Config:
     fee_buffer_percent: float = 0.5  # 0.5% fee buffer
     max_stake: float = 1000.0  # Maximum stake per arbitrage
 
+    # Wallet Classification Configuration
+    whale_threshold_usd: float = 10000.0  # Minimum trade size to classify as whale
+    high_confidence_min_roi: float = 10.0  # Minimum ROI % for high-confidence
+    high_confidence_min_win_rate: float = 60.0  # Minimum win rate % for high-confidence
+    high_confidence_min_trades: int = 5  # Minimum trades for high-confidence
+    suspicious_cluster_min_wallets: int = 3  # Min fresh wallets to flag as suspicious
+    suspicious_cluster_time_window_hours: float = 24.0  # Time window for clustering
+
     # Alert Configuration
     alert_method: Optional[Literal["email", "telegram"]] = None
     telegram_api_key: Optional[str] = None
@@ -83,6 +91,12 @@ class Config:
         - MAX_STAKE: Maximum stake per arbitrage
         - ENABLE_HISTORY: Enable history recording (default: false)
         - HISTORY_SAMPLING_MS: History sampling interval in ms (default: 1500)
+        - WHALE_THRESHOLD_USD: Trade size threshold for whale classification (default: 10000.0)
+        - HIGH_CONFIDENCE_MIN_ROI: Minimum ROI % for high-confidence (default: 10.0)
+        - HIGH_CONFIDENCE_MIN_WIN_RATE: Minimum win rate % for high-confidence (default: 60.0)
+        - HIGH_CONFIDENCE_MIN_TRADES: Minimum trades for high-confidence (default: 5)
+        - SUSPICIOUS_CLUSTER_MIN_WALLETS: Min fresh wallets to flag cluster (default: 3)
+        - SUSPICIOUS_CLUSTER_TIME_WINDOW_HOURS: Time window for clustering (default: 24.0)
 
         Returns:
             Config instance with values loaded from environment
@@ -130,6 +144,22 @@ class Config:
         enable_history = enable_history_str.lower() in ("true", "1", "yes")
         history_sampling_ms = int(os.getenv("HISTORY_SAMPLING_MS", "1500"))
 
+        # Load wallet classification configuration
+        whale_threshold_usd = float(os.getenv("WHALE_THRESHOLD_USD", "10000.0"))
+        high_confidence_min_roi = float(os.getenv("HIGH_CONFIDENCE_MIN_ROI", "10.0"))
+        high_confidence_min_win_rate = float(
+            os.getenv("HIGH_CONFIDENCE_MIN_WIN_RATE", "60.0")
+        )
+        high_confidence_min_trades = int(
+            os.getenv("HIGH_CONFIDENCE_MIN_TRADES", "5")
+        )
+        suspicious_cluster_min_wallets = int(
+            os.getenv("SUSPICIOUS_CLUSTER_MIN_WALLETS", "3")
+        )
+        suspicious_cluster_time_window_hours = float(
+            os.getenv("SUSPICIOUS_CLUSTER_TIME_WINDOW_HOURS", "24.0")
+        )
+
         # Create config instance
         config = cls(
             api_endpoint=api_endpoint,
@@ -154,6 +184,12 @@ class Config:
             log_file=log_file,
             enable_history=enable_history,
             history_sampling_ms=history_sampling_ms,
+            whale_threshold_usd=whale_threshold_usd,
+            high_confidence_min_roi=high_confidence_min_roi,
+            high_confidence_min_win_rate=high_confidence_min_win_rate,
+            high_confidence_min_trades=high_confidence_min_trades,
+            suspicious_cluster_min_wallets=suspicious_cluster_min_wallets,
+            suspicious_cluster_time_window_hours=suspicious_cluster_time_window_hours,
         )
 
         # Validate and log configuration
