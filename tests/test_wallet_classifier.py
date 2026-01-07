@@ -221,7 +221,8 @@ class TestWhaleClassification(TestWalletClassifier):
 
     def test_classify_whale_with_large_trade(self):
         """Test classifying a wallet with large trades as whale."""
-        # Store large trade
+        # Store large trade with fixed timestamp
+        fixed_time = datetime(2024, 1, 5, 12, 0, 0)
         trades = [
             WalletTrade(
                 wallet="0xwhale123",
@@ -229,7 +230,7 @@ class TestWhaleClassification(TestWalletClassifier):
                 side="yes",
                 price=0.65,
                 size=15000.0,
-                timestamp=datetime.now(),
+                timestamp=fixed_time,
                 tx_hash="0xhash_whale1",
             ),
         ]
@@ -685,6 +686,37 @@ class TestDatabaseOperations(TestWalletClassifier):
         """Test retrieving tags from empty database."""
         tags = get_wallet_tags(db_path=self.test_db_path)
         self.assertEqual(len(tags), 0)
+
+    def test_metadata_serialization_deserialization(self):
+        """Test that metadata is properly JSON serialized and deserialized."""
+        # Store a tag with complex metadata
+        metadata = {
+            "threshold": 10000.0,
+            "large_trades_count": 5,
+            "max_trade_size": 25000.0,
+            "nested": {"key": "value", "number": 42},
+        }
+        tag = WalletTag(
+            wallet="0xmetadata_test",
+            tag="whale",
+            confidence=1.0,
+            metadata=metadata,
+        )
+
+        # Store the tag
+        store_wallet_tag(tag, db_path=self.test_db_path)
+
+        # Retrieve and verify metadata is properly deserialized
+        tags = get_wallet_tags(wallet="0xmetadata_test", db_path=self.test_db_path)
+        self.assertEqual(len(tags), 1)
+
+        retrieved_metadata = tags[0]["metadata"]
+        self.assertIsInstance(retrieved_metadata, dict)
+        self.assertEqual(retrieved_metadata["threshold"], 10000.0)
+        self.assertEqual(retrieved_metadata["large_trades_count"], 5)
+        self.assertEqual(retrieved_metadata["max_trade_size"], 25000.0)
+        self.assertEqual(retrieved_metadata["nested"]["key"], "value")
+        self.assertEqual(retrieved_metadata["nested"]["number"], 42)
 
 
 if __name__ == "__main__":

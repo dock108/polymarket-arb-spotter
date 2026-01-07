@@ -6,6 +6,7 @@ and behavior, including fresh wallets, whales, high-confidence wallets, and susp
 clusters.
 """
 
+import json
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
@@ -36,7 +37,7 @@ class WalletTag:
             "wallet": self.wallet,
             "tag": self.tag,
             "confidence": self.confidence,
-            "metadata": str(self.metadata),  # Store as JSON string
+            "metadata": json.dumps(self.metadata),  # Store as JSON string
             "timestamp": self.timestamp.isoformat(),
         }
 
@@ -539,10 +540,17 @@ def get_wallet_tags(
         # Column names
         columns = ["id", "wallet", "tag", "confidence", "metadata", "timestamp"]
 
-        # Convert to dictionaries
+        # Convert to dictionaries and deserialize metadata
         results = []
         for row in rows:
             row_dict = dict(zip(columns, row))
+            # Deserialize metadata JSON
+            if row_dict.get("metadata"):
+                try:
+                    row_dict["metadata"] = json.loads(row_dict["metadata"])
+                except (json.JSONDecodeError, TypeError):
+                    # Keep as string if deserialization fails
+                    pass
             results.append(row_dict)
 
         return results
