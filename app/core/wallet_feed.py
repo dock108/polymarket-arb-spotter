@@ -12,7 +12,7 @@ from collections import deque
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Set
+from typing import Any, Callable, Dict, List, Optional, Set, Union
 
 import requests
 from sqlite_utils import Database
@@ -590,4 +590,83 @@ def get_wallet_trades(
 
     except Exception as e:
         logger.error(f"Error retrieving wallet trades: {e}", exc_info=True)
+        return []
+
+
+def get_wallet_trades_in_range(
+    market_id: Optional[str] = None,
+    start: Optional[Union[datetime, str]] = None,
+    end: Optional[Union[datetime, str]] = None,
+    limit: Optional[int] = None,
+    db_path: str = _WALLET_TRADES_DB_PATH,
+) -> List[WalletTrade]:
+    """
+    Retrieve wallet trades within a time range, ordered ascending.
+
+    Args:
+        market_id: Optional market ID to filter by.
+        start: Optional start timestamp (inclusive).
+        end: Optional end timestamp (inclusive).
+        limit: Optional maximum number of trades to return.
+        db_path: Path to the SQLite database file.
+
+    Returns:
+        List of WalletTrade objects.
+    """
+    try:
+        db = _get_db(db_path)
+        _ensure_table(db)
+
+        where_clauses = ["1=1"]
+        params: List[Any] = []
+
+        if market_id:
+            where_clauses.append("market_id = ?")
+            params.append(market_id)
+
+        if start:
+            start_str = (
+                start.isoformat() if isinstance(start, datetime) else str(start)
+            )
+            where_clauses.append("timestamp >= ?")
+            params.append(start_str)
+
+        if end:
+            end_str = end.isoformat() if isinstance(end, datetime) else str(end)
+            where_clauses.append("timestamp <= ?")
+            params.append(end_str)
+
+        query = """
+            SELECT wallet, market_id, side, price, size, timestamp, tx_hash
+            FROM wallet_trades
+            WHERE {where_sql}
+            ORDER BY timestamp ASC
+        """.format(where_sql=" AND ".join(where_clauses))
+
+        if limit is not None:
+            query += " LIMIT ?"
+            params.append(limit)
+
+        rows = db.execute(query, params).fetchall()
+        trades: List[WalletTrade] = []
+        for row in rows:
+            try:
+                timestamp = datetime.fromisoformat(row[5].replace("Z", "+00:00"))
+                trades.append(
+                    WalletTrade(
+                        wallet=row[0],
+                        market_id=row[1],
+                        side=row[2],
+                        price=float(row[3]),
+                        size=float(row[4]),
+                        timestamp=timestamp,
+                        tx_hash=row[6],
+                    )
+                )
+            except Exception as exc:
+                logger.warning("Skipping malformed trade row: %s", exc)
+        return trades
+
+    except Exception as e:
+        logger.error(f"Error retrieving wallet trades in range: {e}", exc_info=True)
         return []
