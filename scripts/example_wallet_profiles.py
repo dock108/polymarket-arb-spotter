@@ -20,17 +20,17 @@ from app.core.wallet_profiles import (
 
 def main():
     """Demonstrate wallet profile functionality."""
-    
+
     # Use a test database for demonstration
     db_path = "data/example_wallet_profiles.db"
-    
+
     print("=" * 70)
     print("Wallet Profile Analytics Demo")
     print("=" * 70)
-    
+
     # Initialize wallet feed
     feed = WalletFeed(db_path=db_path)
-    
+
     # Create sample trades for demonstration
     print("\n1. Creating sample trade data...")
     sample_trades = [
@@ -101,28 +101,28 @@ def main():
             tx_hash="0xhash7",
         ),
     ]
-    
+
     stored_count = feed.store_trades(sample_trades)
     print(f"   Stored {stored_count} trades")
-    
+
     # Define market outcomes for ROI/win rate calculation
     market_outcomes = {
         "market_election": {"outcome": "yes", "resolved": True},
         "market_sports": {"outcome": "no", "resolved": True},
         "market_crypto": {"outcome": "yes", "resolved": True},
     }
-    
+
     # 2. Get profile for a specific wallet
     print("\n2. Getting profile for specific wallet...")
     print("-" * 70)
-    
+
     wallet_address = "0xSmartWallet1"
     profile = get_wallet_profile(
         wallet_address,
         market_outcomes=market_outcomes,
         db_path=db_path,
     )
-    
+
     if profile:
         print(f"\nWallet: {profile.wallet}")
         print(f"Total Trades: {profile.total_trades}")
@@ -130,16 +130,16 @@ def main():
         print(f"Total Volume: ${profile.total_volume:.2f}")
         print(f"Markets Traded: {len(profile.markets_traded)}")
         print(f"  - {', '.join(profile.markets_traded)}")
-        print(f"\nPerformance Metrics (from resolved markets):")
+        print("\nPerformance Metrics (from resolved markets):")
         print(f"  Resolved Markets: {profile.realized_outcomes}")
         print(f"  Win Rate: {profile.win_rate:.1f}%")
         print(f"  Total Profit: ${profile.total_profit:.2f}")
         print(f"  Average ROI: {profile.avg_roi:.1f}%")
-    
+
     # 3. Rank wallets by different metrics
     print("\n\n3. Ranking wallets by different metrics...")
     print("-" * 70)
-    
+
     # Rank by volume
     print("\n📊 Top Wallets by Trading Volume:")
     top_by_volume = rank_wallets(
@@ -149,10 +149,10 @@ def main():
         limit=10,
         db_path=db_path,
     )
-    
+
     for i, profile in enumerate(top_by_volume, 1):
         print(f"  {i}. {profile.wallet[:20]}... - Volume: ${profile.total_volume:.2f}")
-    
+
     # Rank by win rate
     print("\n🏆 Top Wallets by Win Rate:")
     top_by_win_rate = rank_wallets(
@@ -162,14 +162,14 @@ def main():
         limit=10,
         db_path=db_path,
     )
-    
+
     for i, profile in enumerate(top_by_win_rate, 1):
         print(
             f"  {i}. {profile.wallet[:20]}... - "
             f"Win Rate: {profile.win_rate:.1f}% "
             f"({profile.total_trades} trades)"
         )
-    
+
     # Rank by profit
     print("\n💰 Top Wallets by Total Profit:")
     top_by_profit = rank_wallets(
@@ -179,14 +179,14 @@ def main():
         limit=10,
         db_path=db_path,
     )
-    
+
     for i, profile in enumerate(top_by_profit, 1):
         print(
             f"  {i}. {profile.wallet[:20]}... - "
             f"Profit: ${profile.total_profit:.2f} "
             f"(ROI: {profile.avg_roi:.1f}%)"
         )
-    
+
     # Rank by ROI
     print("\n📈 Top Wallets by ROI:")
     top_by_roi = rank_wallets(
@@ -196,36 +196,36 @@ def main():
         limit=10,
         db_path=db_path,
     )
-    
+
     for i, profile in enumerate(top_by_roi, 1):
         print(
             f"  {i}. {profile.wallet[:20]}... - "
             f"ROI: {profile.avg_roi:.1f}% "
             f"(Profit: ${profile.total_profit:.2f})"
         )
-    
+
     # 4. Get all profiles
     print("\n\n4. Getting all wallet profiles...")
     print("-" * 70)
-    
+
     all_profiles = get_all_wallet_profiles(
         market_outcomes=market_outcomes,
         min_trades=1,
         db_path=db_path,
     )
-    
+
     print(f"\nTotal wallets tracked: {len(all_profiles)}")
     print("\nSummary Statistics:")
-    
+
     if all_profiles:
         total_volume = sum(p.total_volume for p in all_profiles)
         avg_win_rate = sum(p.win_rate for p in all_profiles) / len(all_profiles)
         total_trades = sum(p.total_trades for p in all_profiles)
-        
+
         print(f"  Total Trading Volume: ${total_volume:.2f}")
         print(f"  Average Win Rate: {avg_win_rate:.1f}%")
         print(f"  Total Trades Tracked: {total_trades}")
-    
+
     print("\n" + "=" * 70)
     print("Finding 'Smart Wallets':")
     print("=" * 70)
@@ -233,12 +233,13 @@ def main():
     print("  - At least 2 trades (to show consistency)")
     print("  - Win rate > 60%")
     print("  - Positive ROI")
-    
+
     smart_wallets = [
-        p for p in all_profiles
+        p
+        for p in all_profiles
         if p.total_trades >= 2 and p.win_rate > 60 and p.avg_roi > 0
     ]
-    
+
     if smart_wallets:
         print(f"\n✨ Found {len(smart_wallets)} smart wallet(s):\n")
         for profile in smart_wallets:
@@ -251,7 +252,7 @@ def main():
             print()
     else:
         print("\n  No wallets meet the smart wallet criteria yet.")
-    
+
     print("\n" + "=" * 70)
     print("Demo completed successfully!")
     print("=" * 70)

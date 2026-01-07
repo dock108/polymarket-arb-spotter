@@ -192,10 +192,8 @@ class TestCalculateWalletStats(unittest.TestCase):
                 "tx_hash": "0xhash1",
             },
         ]
-        
-        market_outcomes = {
-            "market_1": {"outcome": "yes", "resolved": True}
-        }
+
+        market_outcomes = {"market_1": {"outcome": "yes", "resolved": True}}
 
         stats = _calculate_wallet_stats(trades, market_outcomes)
 
@@ -219,7 +217,7 @@ class TestCalculateWalletStats(unittest.TestCase):
                 "tx_hash": "0xhash1",
             },
         ]
-        
+
         market_outcomes = {
             "market_1": {"outcome": "no", "resolved": True}  # Trade was YES but NO won
         }
@@ -255,7 +253,7 @@ class TestCalculateWalletStats(unittest.TestCase):
                 "tx_hash": "0xhash2",
             },
         ]
-        
+
         market_outcomes = {
             "market_1": {"outcome": "yes", "resolved": True},  # Win
             "market_2": {"outcome": "yes", "resolved": True},  # Loss (traded NO)
@@ -425,7 +423,9 @@ class TestRankWallets(TestWalletProfiles):
         """Test that limit parameter works."""
         self._store_sample_trades()
 
-        result = rank_wallets(by="volume", min_trades=1, limit=1, db_path=self.test_db_path)
+        result = rank_wallets(
+            by="volume", min_trades=1, limit=1, db_path=self.test_db_path
+        )
         self.assertEqual(len(result), 1)
 
     def test_rank_wallets_invalid_metric(self):
@@ -450,7 +450,7 @@ class TestGetAllWalletProfiles(TestWalletProfiles):
 
         result = get_all_wallet_profiles(db_path=self.test_db_path)
         self.assertEqual(len(result), 2)
-        
+
         wallets = [p.wallet for p in result]
         self.assertIn("0x1111111111111111", wallets)
         self.assertIn("0x2222222222222222", wallets)
@@ -481,7 +481,7 @@ class TestEdgeCases(TestWalletProfiles):
         self.feed.store_trade(trade)
 
         profile = get_wallet_profile("0x9999999999999999", db_path=self.test_db_path)
-        
+
         self.assertIsNotNone(profile)
         self.assertEqual(profile.total_trades, 1)
         self.assertEqual(profile.avg_entry_price, 0.50)
@@ -503,7 +503,7 @@ class TestEdgeCases(TestWalletProfiles):
         self.feed.store_trades(trades)
 
         profile = get_wallet_profile("0x8888888888888888", db_path=self.test_db_path)
-        
+
         self.assertIsNotNone(profile)
         self.assertEqual(profile.total_volume, 0.0)
 
@@ -541,7 +541,7 @@ class TestEdgeCases(TestWalletProfiles):
         self.feed.store_trades(trades)
 
         profile = get_wallet_profile("0x7777777777777777", db_path=self.test_db_path)
-        
+
         self.assertIsNotNone(profile)
         self.assertEqual(profile.total_trades, 3)
         self.assertEqual(len(profile.markets_traded), 1)

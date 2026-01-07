@@ -7,11 +7,7 @@ based on their trading history and outcomes.
 """
 
 from dataclasses import dataclass, field
-from datetime import datetime
-from pathlib import Path
 from typing import Any, Dict, List, Optional, Set
-
-from sqlite_utils import Database
 
 from app.core.logger import logger
 from app.core.wallet_feed import _WALLET_TRADES_DB_PATH, _ensure_table, _get_db
@@ -84,7 +80,7 @@ def _calculate_wallet_stats(
 
     # Track markets and positions
     markets_traded = list(set(t.get("market_id") for t in trades))
-    
+
     # Group trades by market to calculate positions and outcomes
     market_positions: Dict[str, List[Dict[str, Any]]] = {}
     for trade in trades:
@@ -106,14 +102,14 @@ def _calculate_wallet_stats(
             if outcome_info and outcome_info.get("resolved"):
                 realized_outcomes += 1
                 winning_outcome = outcome_info.get("outcome")  # "yes" or "no"
-                
+
                 # Calculate profit for this market
                 for trade in market_trades:
                     total_resolved_trades += 1
                     trade_side = trade.get("side")
                     trade_price = float(trade.get("price", 0))
                     trade_size = float(trade.get("size", 0))
-                    
+
                     # Calculate profit based on whether trade side matches winning outcome
                     if trade_side == winning_outcome:
                         # Winning trade: profit = size * (1 - price)
@@ -126,8 +122,12 @@ def _calculate_wallet_stats(
                         total_profit -= loss
 
     # Calculate win rate and ROI
-    win_rate = (winning_trades / total_resolved_trades * 100) if total_resolved_trades > 0 else 0.0
-    
+    win_rate = (
+        (winning_trades / total_resolved_trades * 100)
+        if total_resolved_trades > 0
+        else 0.0
+    )
+
     # Calculate ROI: total profit / total invested volume
     avg_roi = (total_profit / total_volume * 100) if total_volume > 0 else 0.0
 
@@ -179,7 +179,16 @@ def get_wallet_profile(
             return None
 
         # Convert rows to dictionaries
-        columns = ["id", "wallet", "market_id", "side", "price", "size", "timestamp", "tx_hash"]
+        columns = [
+            "id",
+            "wallet",
+            "market_id",
+            "side",
+            "price",
+            "size",
+            "timestamp",
+            "tx_hash",
+        ]
         trades = [dict(zip(columns, row)) for row in rows]
 
         # Calculate statistics
@@ -199,7 +208,9 @@ def get_wallet_profile(
             total_profit=stats["total_profit"],
         )
 
-        logger.debug(f"Generated profile for wallet {wallet}: {stats['total_trades']} trades")
+        logger.debug(
+            f"Generated profile for wallet {wallet}: {stats['total_trades']} trades"
+        )
         return profile
 
     except Exception as e:
