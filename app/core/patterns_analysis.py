@@ -144,7 +144,12 @@ class EventCorrelationAnalyzer:
         """
         try:
             market_id = label["market_id"]
-            signal_time = datetime.fromisoformat(label["timestamp"])
+            signal_time = parse_timestamp(label["timestamp"])
+            if signal_time is None:
+                logger.warning(
+                    f"Invalid timestamp for label {label.get('id')}: {label.get('timestamp')}"
+                )
+                return None
 
             start_time = signal_time - timedelta(minutes=5)
             end_time = signal_time + timedelta(minutes=self.resolution_window_minutes)
