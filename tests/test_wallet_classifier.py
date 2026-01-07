@@ -325,7 +325,10 @@ class TestHighConfidenceClassification(TestWalletClassifier):
     """Test high-confidence wallet classification."""
 
     def test_classify_high_confidence_without_outcomes(self):
-        """Test that high-confidence classification returns None without market outcomes."""
+        """
+        Test that high-confidence classification returns None
+        without market outcomes.
+        """
         # Store multiple trades
         trades = [
             WalletTrade(
@@ -495,7 +498,6 @@ class TestSuspiciousClusterDetection(TestWalletClassifier):
 
     def test_detect_suspicious_cluster_outside_time_window(self):
         """Test that trades outside time window are not included."""
-        today_start = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
 
         trades = []
         # Recent fresh wallets (within 30 minutes)
@@ -676,9 +678,7 @@ class TestDatabaseOperations(TestWalletClassifier):
         store_wallet_tags(tags, db_path=self.test_db_path)
 
         # Get tags with confidence >= 0.7
-        high_conf_tags = get_wallet_tags(
-            min_confidence=0.7, db_path=self.test_db_path
-        )
+        high_conf_tags = get_wallet_tags(min_confidence=0.7, db_path=self.test_db_path)
         self.assertEqual(len(high_conf_tags), 2)
 
     def test_get_wallet_tags_empty_database(self):

@@ -8,8 +8,7 @@ clusters.
 
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
-from pathlib import Path
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Dict, List, Optional
 
 from sqlite_utils import Database
 
@@ -162,7 +161,9 @@ def classify_whale(
 
         # Check for large trades
         query = """
-            SELECT COUNT(*) as large_trades, MAX(size) as max_trade, AVG(size) as avg_trade
+            SELECT COUNT(*) as large_trades,
+                   MAX(size) as max_trade,
+                   AVG(size) as avg_trade
             FROM wallet_trades
             WHERE wallet = ? AND size >= ?
         """
@@ -171,7 +172,8 @@ def classify_whale(
         if result and result[0] > 0:
             large_trades, max_trade, avg_trade = result
             logger.debug(
-                f"Wallet {wallet} classified as whale: {large_trades} large trades, max: {max_trade}"
+                f"Wallet {wallet} classified as whale: "
+                f"{large_trades} large trades, max: {max_trade}"
             )
             return WalletTag(
                 wallet=wallet,
@@ -283,17 +285,19 @@ def detect_suspicious_cluster(
     db_path: str = _WALLET_TRADES_DB_PATH,
 ) -> List[WalletTag]:
     """
-    Detect suspicious cluster: multiple fresh wallets trading in the same market.
+    Detect suspicious cluster: multiple fresh wallets in the same market.
 
     Args:
         market_id: Market ID to check
-        min_fresh_wallets: Minimum number of fresh wallets to flag as suspicious
-        time_window_hours: Time window to consider for clustering (in hours)
-        reference_date: Reference date for "fresh" classification (defaults to start of today)
+        min_fresh_wallets: Min number of fresh wallets to flag as suspicious
+        time_window_hours: Time window for clustering (in hours)
+        reference_date: Reference date for "fresh" classification
+                       (defaults to start of today)
         db_path: Path to wallet trades database
 
     Returns:
-        List of WalletTag objects for wallets in suspicious cluster, empty if none detected
+        List of WalletTag objects for wallets in suspicious cluster,
+        empty if none detected
     """
     try:
         db = _get_db(db_path)
@@ -325,7 +329,9 @@ def detect_suspicious_cluster(
                   WHERE timestamp < ?
               )
         """
-        rows = db.execute(query, [market_id, window_start_str, reference_str]).fetchall()
+        rows = db.execute(
+            query, [market_id, window_start_str, reference_str]
+        ).fetchall()
 
         fresh_wallets = [row[0] for row in rows]
 
