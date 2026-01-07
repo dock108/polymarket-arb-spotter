@@ -638,6 +638,11 @@ class InterestingMomentsFinder:
     This saves time during analysis by highlighting key review candidates.
     """
 
+    # Severity calculation constants
+    PRICE_SEVERITY_MULTIPLIER = 2  # For normalizing price acceleration severity
+    IMBALANCE_SWING_NORMALIZER = 0.3  # 30% swing for max severity
+    ALERT_CLUSTER_SEVERITY_MULTIPLIER = 2  # For normalizing cluster size severity
+
     def __init__(
         self,
         history_db_path: str = _HISTORY_DB_PATH,
@@ -776,7 +781,12 @@ class InterestingMomentsFinder:
                 if price_change >= self.price_acceleration_threshold:
                     # Calculate severity based on how much it exceeds threshold
                     severity = min(
-                        1.0, price_change / (self.price_acceleration_threshold * 2)
+                        1.0,
+                        price_change
+                        / (
+                            self.price_acceleration_threshold
+                            * self.PRICE_SEVERITY_MULTIPLIER
+                        ),
                     )
 
                     moments.append(
@@ -919,8 +929,8 @@ class InterestingMomentsFinder:
                         # Calculate how far it swung
                         swing_magnitude = abs(price - 0.5) + self.imbalance_threshold
                         severity = min(
-                            1.0, swing_magnitude / 0.3
-                        )  # Normalize to 30% swing
+                            1.0, swing_magnitude / self.IMBALANCE_SWING_NORMALIZER
+                        )
 
                         moments.append(
                             InterestingMoment(
@@ -1003,7 +1013,12 @@ class InterestingMomentsFinder:
                 if len(events_in_window) >= self.min_alert_cluster_size:
                     # Calculate severity based on cluster size
                     severity = min(
-                        1.0, len(events_in_window) / (self.min_alert_cluster_size * 2)
+                        1.0,
+                        len(events_in_window)
+                        / (
+                            self.min_alert_cluster_size
+                            * self.ALERT_CLUSTER_SEVERITY_MULTIPLIER
+                        ),
                     )
 
                     # Get unique label types in cluster
