@@ -165,6 +165,29 @@ def render_settings_view():
 
     st.markdown("---")
 
+    # Ethics & Safety Configuration
+    st.subheader("Ethics & Safety")
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        st.text_input(
+            "Wallet Features Enabled",
+            value="Yes" if config.wallet_features_enabled else "No",
+            disabled=True,
+            help="Controls whether wallet intelligence features are available.",
+        )
+
+    with col2:
+        st.text_input(
+            "Mask Full Wallet Addresses",
+            value="Yes" if config.do_not_expose_full_addresses else "No",
+            disabled=True,
+            help="Prevents displaying full wallet addresses in UI or alerts.",
+        )
+
+    st.markdown("---")
+
     # System Information
     st.subheader("System Information")
 

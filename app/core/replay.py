@@ -33,6 +33,7 @@ from app.core.wallet_classifier import (
 from app.core.wallet_feed import _WALLET_TRADES_DB_PATH, get_wallet_trades_in_range
 from app.core.wallet_performance import evaluate_resolved_market, load_market_outcomes
 from app.core.wallet_signals import WalletSignal, WalletSignalConfig, detect_wallet_signals
+from app.core.privacy import format_wallet_profile_url
 
 # Import depth scanner at module level for better performance
 try:
@@ -605,7 +606,7 @@ class BacktestEngine:
             "bet_size": self._extract_bet_size(signal.evidence),
             "classification": self._classify_wallet_label(signal.wallet),
             "signal_type": signal.signal_type,
-            "profile_url": self._wallet_profile_url(signal.wallet),
+            "profile_url": format_wallet_profile_url(signal.wallet),
             "evidence": signal.evidence,
         }
 
@@ -648,13 +649,6 @@ class BacktestEngine:
             if isinstance(value, (int, float)):
                 return float(value)
         return None
-
-    @staticmethod
-    def _wallet_profile_url(wallet: str) -> str:
-        """Build Polymarket profile URL for wallet."""
-        if not wallet:
-            return "N/A"
-        return f"https://polymarket.com/profile/{wallet}"
 
     def _classify_wallet_label(self, wallet: str) -> str:
         """Classify wallet for backtest alert logging."""

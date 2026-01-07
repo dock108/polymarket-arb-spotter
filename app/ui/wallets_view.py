@@ -15,6 +15,8 @@ from datetime import datetime, timedelta
 import pandas as pd
 import streamlit as st
 
+from app.core.config import config
+from app.core.privacy import format_wallet_address
 
 def _format_currency(value: float) -> str:
     if abs(value) >= 1_000_000:
@@ -257,6 +259,12 @@ def render_wallets_view() -> None:
     st.caption(
         "Bloomberg-style situational awareness for high-signal wallets and flow."
     )
+    st.caption("We analyze behavior — we don’t dox people.")
+    if not config.wallet_features_enabled:
+        st.warning(
+            "Wallet intelligence is disabled. Set WALLET_FEATURES_ENABLED=true to enable."
+        )
+        return
     st.markdown("---")
 
     wallets = _wallet_leaderboard()
@@ -340,6 +348,7 @@ def render_wallets_view() -> None:
         display["24h PnL"] = display["24h PnL"].apply(_format_currency)
         display["30d ROI (%)"] = display["30d ROI (%)"].apply(lambda x: f"{x:.1f}")
         display["Win Rate (%)"] = display["Win Rate (%)"].apply(lambda x: f"{x:.0f}")
+        display["Wallet"] = display["Wallet"].apply(format_wallet_address)
         st.dataframe(display, use_container_width=True)
 
     st.markdown("---")
@@ -388,4 +397,3 @@ def render_wallets_view() -> None:
             markets_display["Volume"] = markets_display["Volume"].apply(_format_currency)
             markets_display["PnL"] = markets_display["PnL"].apply(_format_currency)
         st.dataframe(markets_display, use_container_width=True, hide_index=True)
-
