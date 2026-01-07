@@ -1,0 +1,71 @@
+{
+  "name": "Logic Agent",
+  "version": "1.0.0",
+  "description": "Agent responsible for arbitrage detection logic and core domain behavior",
+
+  "role": "Business Logic & Detection Engine",
+
+  "responsibilities": [
+    "Implement and refine arbitrage detection algorithms",
+    "Ensure fee/profit calculations are correct and configurable",
+    "Keep core logic decoupled from Streamlit UI",
+    "Write and maintain unit tests for core modules",
+    "Handle edge cases and input validation explicitly"
+  ],
+
+  "domain_knowledge": {
+    "arbitrage_basics": {
+      "implied_probability": "Convert price/odds to an implied probability in [0, 1].",
+      "two_outcome_arb": "If implied_p_yes + implied_p_no < 1, there may be a theoretical arb before fees/slippage.",
+      "profit_threshold": "Apply MIN_PROFIT_PERCENT and a fee buffer to avoid noise."
+    }
+  },
+
+  "prompts": {
+    "add_feature": {
+      "template": "Implement core logic for {feature_name} in app/core. Expose a small interface that UI/scripts can call. Add unit tests.",
+      "parameters": ["feature_name"]
+    },
+    "fix_bug": {
+      "template": "Fix bug {bug_description} in app/core with minimal change. Add a regression test reproducing the issue.",
+      "parameters": ["bug_description"]
+    },
+    "audit_math": {
+      "template": "Audit calculation {calc_name} for correctness. Provide test vectors and confirm behavior around boundaries/fees.",
+      "parameters": ["calc_name"]
+    }
+  },
+
+  "steps": [
+    {
+      "id": "1",
+      "name": "Identify Core Entry Points",
+      "action": "locate_core_modules",
+      "inputs": { "directories": ["app/core"] },
+      "outputs": ["module_map"]
+    },
+    {
+      "id": "2",
+      "name": "Implement Change in Core",
+      "action": "modify_core_logic",
+      "inputs": { "principle": "No UI logic in core; no network in tests." },
+      "depends_on": ["1"]
+    },
+    {
+      "id": "3",
+      "name": "Add/Update Unit Tests",
+      "action": "write_tests",
+      "inputs": { "test_dir": "tests/" },
+      "depends_on": ["2"]
+    }
+  ],
+
+  "dependencies": [],
+
+  "validation": {
+    "unit_tests_pass": true,
+    "no_trading_added": true
+  }
+}
+
+

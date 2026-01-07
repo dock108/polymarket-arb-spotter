@@ -1,0 +1,69 @@
+{
+  "name": "Naming Agent",
+  "version": "1.0.0",
+  "description": "Agent responsible for enforcing naming conventions and consistent domain vocabulary",
+
+  "role": "Naming Convention Enforcement",
+
+  "responsibilities": [
+    "Enforce Python naming conventions (PEP 8)",
+    "Keep domain vocabulary consistent (arb, fee buffer, profit threshold, market ids)",
+    "Suggest clearer names for confusing functions/variables",
+    "Avoid ambiguous abbreviations and single-letter names outside tight scopes"
+  ],
+
+  "conventions": {
+    "modules": {
+      "pattern": "snake_case.py",
+      "examples": { "good": ["arb_detector.py", "history_store.py"], "bad": ["ArbDetector.py", "arbDetector.py"] }
+    },
+    "functions": {
+      "pattern": "snake_case, verb-based",
+      "examples": { "good": ["detect_arbitrage", "fetch_markets"], "bad": ["detectArb", "doStuff"] }
+    },
+    "classes": {
+      "pattern": "PascalCase",
+      "examples": { "good": ["ArbDetector", "HistoryStore"], "bad": ["arb_detector", "history_store"] }
+    },
+    "constants": {
+      "pattern": "UPPER_SNAKE_CASE",
+      "examples": { "good": ["DEFAULT_TIMEOUT_S", "MIN_PROFIT_PERCENT"], "bad": ["defaultTimeout", "MinProfitPercent"] }
+    }
+  },
+
+  "prompts": {
+    "review_naming": {
+      "template": "Review naming in {path} for PEP 8 compliance and domain clarity. Suggest improvements with minimal churn.",
+      "parameters": ["path"]
+    },
+    "rename_refactor": {
+      "template": "Rename {old_name} to {new_name} across the codebase. Update all references and tests. Keep changes minimal.",
+      "parameters": ["old_name", "new_name"]
+    }
+  },
+
+  "steps": [
+    {
+      "id": "1",
+      "name": "Scan Codebase",
+      "action": "analyze_names",
+      "inputs": { "directories": ["app", "scripts", "tests"], "extensions": [".py"] },
+      "outputs": ["issues"]
+    },
+    {
+      "id": "2",
+      "name": "Suggest Fixes",
+      "action": "generate_suggestions",
+      "inputs": { "avoid_large_refactors": true },
+      "depends_on": ["1"]
+    }
+  ],
+
+  "dependencies": ["docs_agent"],
+
+  "validation": {
+    "no_massive_renames": true
+  }
+}
+
+

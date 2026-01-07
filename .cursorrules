@@ -1,0 +1,94 @@
+# AI Coding Rules
+
+## Universal Standards
+
+### Code Quality
+- Write clear, self-documenting code. Comments explain WHY, not WHAT.
+- Small, focused functions. One responsibility per function.
+- No magic numbers or hardcoded strings—use named constants/config.
+- Fail fast. Validate inputs early, handle errors explicitly.
+- No silent failures. Log or surface all errors.
+
+### Change Philosophy
+- Prefer minimal, incremental changes over rewrites.
+- Don't refactor unrelated code while fixing bugs.
+- If something works, don't "improve" it without reason.
+- Leave code cleaner than you found it, but don't go overboard.
+
+### Dependencies
+- Don't add new dependencies casually.
+- Justify any new package inline (comment in code or note in README).
+- Prefer standard library solutions when reasonable.
+
+### Testing
+- Add tests for new logic.
+- If fixing a bug, add a regression test.
+- Tests should be deterministic and fast.
+- Avoid network calls in tests (mock/stub instead).
+
+### Documentation
+- Update README if behavior changes.
+- Add/adjust docs under `docs/` for user-facing feature changes.
+- Document breaking changes explicitly.
+
+### What NOT to Do
+- Don't over-engineer or over-abstract.
+- Don't add features that weren't requested.
+- Don't guess—ask or leave a TODO.
+- Don't use `print()` in production code—use the project logger.
+
+---
+
+## Tech Stack: Python 3.8+ / Streamlit
+
+### Python Conventions
+- Type hints on all public function signatures (and most internal ones).
+- Prefer `pathlib.Path` over string paths in new code.
+- Keep I/O (network/db/fs) isolated behind small interfaces to enable testing.
+- Keep line length ~100 chars where practical (Black-friendly).
+
+### Formatting & Linting
+- Format with `black` (use repo defaults).
+- Lint with `flake8`.
+- Typecheck with `mypy` where feasible (avoid over-complicating).
+
+### Streamlit Practices
+- Keep UI code in `app/ui/`; avoid business logic in Streamlit view files.
+- Use caching (`st.cache_data`/`st.cache_resource`) for expensive reads/computation when safe.
+- Keep state in `st.session_state` and isolate side-effects.
+- Any background polling/loops must be throttled and cancellable.
+
+### Logging
+- Use the project logger from `app/core/logger.py` (or whatever is established).
+- Include context in logs (market id, timestamps, wallet address, etc.).
+- Never log secrets (API keys, tokens).
+
+### File Structure (intent)
+```
+app/
+├── core/     # Core domain logic, API/client, detection, persistence, alerts
+└── ui/       # Streamlit views (presentation layer)
+scripts/      # Examples and CLI-ish entrypoints
+tests/        # Pytest suite
+docs/         # Documentation
+data/         # Local data/config/db files
+```
+
+### Layer Responsibilities
+- **app/ui/**: presentation only; user input handling and rendering.
+- **app/core/**: all business logic (arb detection, scanning, storage, alerts).
+- **scripts/**: thin entrypoints / examples calling core.
+
+---
+
+## Project: Polymarket Arbitrage Spotter
+
+### Purpose
+Detect and monitor potential arbitrage opportunities and related signals in Polymarket markets (no trading).
+
+### Guardrails
+- Do not implement trading or auto-execution features.
+- Keep external calls centralized (API client modules), never scattered across UI.
+- Preserve backwards compatibility for scripts in `scripts/` unless explicitly changing them.
+
+

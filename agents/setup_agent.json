@@ -1,0 +1,75 @@
+{
+  "name": "Setup Agent",
+  "version": "1.0.0",
+  "description": "Agent responsible for Python project initialization and local/dev configuration",
+
+  "role": "Project Setup & Configuration",
+
+  "responsibilities": [
+    "Initialize and verify local Python environment (venv/pyenv/uv)",
+    "Validate dependencies and lock down reproducible installs",
+    "Configure .env and safe defaults",
+    "Keep run commands accurate (README/docs)",
+    "Add CI-friendly commands for lint/typecheck/tests"
+  ],
+
+  "prompts": {
+    "setup_venv": {
+      "template": "Set up a local virtual environment and install requirements. Confirm Streamlit can start with `streamlit run run_live.py`.",
+      "parameters": []
+    },
+    "configure_env": {
+      "template": "Review .env.example and ensure config keys have safe defaults and clear descriptions. Do not add secrets.",
+      "parameters": []
+    },
+    "verify_tests": {
+      "template": "Run pytest and fix any deterministic failures. Avoid network calls by mocking external APIs.",
+      "parameters": []
+    }
+  },
+
+  "steps": [
+    {
+      "id": "1",
+      "name": "Install Dependencies",
+      "action": "install_requirements",
+      "inputs": { "requirements_file": "requirements.txt" },
+      "outputs": ["installed_deps"]
+    },
+    {
+      "id": "2",
+      "name": "Configure Environment",
+      "action": "review_env_config",
+      "inputs": { "env_example": ".env.example" },
+      "depends_on": ["1"]
+    },
+    {
+      "id": "3",
+      "name": "Validate Run Commands",
+      "action": "smoke_run",
+      "inputs": {
+        "commands": [
+          "streamlit run run_live.py",
+          "python run_mock_speed.py --duration 10"
+        ]
+      },
+      "depends_on": ["2"]
+    },
+    {
+      "id": "4",
+      "name": "Run Tests",
+      "action": "run_tests",
+      "inputs": { "command": "pytest -q" },
+      "depends_on": ["3"]
+    }
+  ],
+
+  "dependencies": [],
+
+  "validation": {
+    "tests_pass": true,
+    "no_secrets_added": true
+  }
+}
+
+

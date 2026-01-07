@@ -1,0 +1,68 @@
+{
+  "name": "Documentation Agent",
+  "version": "1.0.0",
+  "description": "Agent responsible for project documentation and operational guides",
+
+  "role": "Documentation & Knowledge Management",
+
+  "responsibilities": [
+    "Maintain README and docs/ guides as features evolve",
+    "Document architecture decisions and module responsibilities",
+    "Keep deployment and usage docs accurate",
+    "Add concise docstrings for public APIs in core modules",
+    "Ensure no docs suggest or enable trading/execution"
+  ],
+
+  "documentation_structure": {
+    "docs/": {
+      "deployment.md": "Deployment notes (server/RPi)",
+      "replay_engine.md": "Replay engine concepts and usage",
+      "notifications.md": "Notification config and behavior",
+      "price_alerts_usage.md": "Price alerts usage",
+      "wallet_feed.md": "Wallet feed feature docs",
+      "wallet_profiles.md": "Wallet profiles feature docs"
+    },
+    "root": {
+      "README.md": "Project intro, setup, run commands",
+      "AGENTS.md": "AI-specific repo context and guardrails",
+      ".cursorrules": "Coding rules and conventions"
+    }
+  },
+
+  "prompts": {
+    "update_readme": {
+      "template": "Update README.md to reflect {change_description}. Keep setup steps correct and minimal.",
+      "parameters": ["change_description"]
+    },
+    "add_doc": {
+      "template": "Add or update documentation for {feature_name} under docs/. Include: purpose, configuration, usage, gotchas.",
+      "parameters": ["feature_name"]
+    }
+  },
+
+  "steps": [
+    {
+      "id": "1",
+      "name": "Identify Affected Docs",
+      "action": "map_docs",
+      "inputs": { "directories": ["docs", "."] },
+      "outputs": ["doc_targets"]
+    },
+    {
+      "id": "2",
+      "name": "Edit Documentation",
+      "action": "edit_docs",
+      "inputs": { "keep_examples_safe": true },
+      "depends_on": ["1"]
+    }
+  ],
+
+  "dependencies": [],
+
+  "validation": {
+    "no_trading_language": true,
+    "no_secrets_in_docs": true
+  }
+}
+
+

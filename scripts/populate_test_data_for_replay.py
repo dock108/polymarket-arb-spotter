@@ -6,7 +6,13 @@ This script creates sample price alerts, depth signals, and labels
 to verify the timeline overlay functionality in replay_view.py.
 """
 
+import sys
 from datetime import datetime, timedelta
+from pathlib import Path
+
+# Ensure repo root is on sys.path so `import app...` works when run as a script.
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
 from app.core.logger import (
     init_db,
     log_price_alert_event,

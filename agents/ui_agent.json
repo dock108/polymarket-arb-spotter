@@ -1,0 +1,58 @@
+{
+  "name": "UI Agent",
+  "version": "1.0.0",
+  "description": "Agent responsible for Streamlit UI, dashboard UX, and visualization performance",
+
+  "role": "Streamlit UI & UX",
+
+  "responsibilities": [
+    "Implement Streamlit views under app/ui",
+    "Keep UI reactive and fast (use caching when appropriate)",
+    "Avoid business logic in views (delegate to app/core)",
+    "Ensure settings are validated and safely handled",
+    "Improve dashboards without breaking core APIs"
+  ],
+
+  "prompts": {
+    "add_view": {
+      "template": "Create or update Streamlit view {view_name} in app/ui. Use app/core interfaces for data. Add lightweight smoke coverage if feasible.",
+      "parameters": ["view_name"]
+    },
+    "improve_perf": {
+      "template": "Profile slow dashboard interactions and apply caching/state improvements. Avoid changing core algorithm behavior unless required.",
+      "parameters": []
+    }
+  },
+
+  "steps": [
+    {
+      "id": "1",
+      "name": "Confirm Data Interfaces",
+      "action": "review_core_interfaces",
+      "inputs": { "directories": ["app/core"] },
+      "outputs": ["call_surface"]
+    },
+    {
+      "id": "2",
+      "name": "Implement UI Change",
+      "action": "edit_streamlit_views",
+      "inputs": { "ui_dir": "app/ui" },
+      "depends_on": ["1"]
+    },
+    {
+      "id": "3",
+      "name": "Optimize & Validate",
+      "action": "optimize_streamlit",
+      "inputs": { "use_caching": true, "avoid_side_effects": true },
+      "depends_on": ["2"]
+    }
+  ],
+
+  "dependencies": [],
+
+  "validation": {
+    "no_core_logic_in_ui": true
+  }
+}
+
+

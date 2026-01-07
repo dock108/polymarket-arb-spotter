@@ -235,6 +235,15 @@ class EventCorrelationAnalyzer:
 
         return closest_tick
 
+    def _parse_timestamp(self, timestamp: str) -> Optional[datetime]:
+        """
+        Parse a timestamp string into a datetime.
+
+        Note: This is intentionally a thin wrapper around `app.core.patterns_utils.parse_timestamp`
+        to keep parsing rules centralized while preserving a stable helper API for tests.
+        """
+        return parse_timestamp(timestamp)
+
     def _find_price_at_offset(
         self, ticks: List[Dict[str, Any]], signal_time: datetime, offset_minutes: int
     ) -> Optional[float]:
