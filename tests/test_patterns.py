@@ -410,7 +410,8 @@ class TestEventCorrelationAnalyzer(unittest.TestCase):
         # Should be either tick at minute 2 or 3
         closest_time = self.analyzer._parse_timestamp(closest["timestamp"])
         self.assertIn(
-            closest_time, [base_time + timedelta(minutes=2), base_time + timedelta(minutes=3)]
+            closest_time,
+            [base_time + timedelta(minutes=2), base_time + timedelta(minutes=3)],
         )
 
     def test_find_price_at_offset(self):
@@ -826,8 +827,6 @@ class TestInterestingMomentsFinder(unittest.TestCase):
 
     def test_interesting_moment_to_dict(self):
         """Test InterestingMoment conversion to dictionary."""
-        from app.core.patterns import InterestingMoment
-
         moment = InterestingMoment(
             timestamp="2024-01-01T12:00:00",
             market_id="test_market",

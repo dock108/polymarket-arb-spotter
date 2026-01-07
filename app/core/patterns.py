@@ -261,7 +261,9 @@ class EventCorrelationAnalyzer:
 
         # Filter by label type if specified
         if label_types:
-            labels = [label for label in labels if label.get("label_type") in label_types]
+            labels = [
+                label for label in labels if label.get("label_type") in label_types
+            ]
 
         logger.info(f"Analyzing {len(labels)} labels")
 
@@ -281,7 +283,9 @@ class EventCorrelationAnalyzer:
         pattern_stats = self._aggregate_pattern_statistics(signal_outcomes, labels)
 
         # Compute overall false positive rate
-        false_signals = [label for label in labels if label.get("label_type") == "false signal"]
+        false_signals = [
+            label for label in labels if label.get("label_type") == "false signal"
+        ]
         overall_fp_rate = len(false_signals) / len(labels) if labels else 0.0
 
         # Compute time-to-resolution curve
@@ -353,7 +357,9 @@ class EventCorrelationAnalyzer:
             )
 
             # Compute average volume after signal
-            after_ticks = [t for t in ticks if self._parse_timestamp(t["timestamp"]) > signal_time]
+            after_ticks = [
+                t for t in ticks if self._parse_timestamp(t["timestamp"]) > signal_time
+            ]
             avg_volume_after = (
                 statistics.mean([t.get("volume", 0.0) for t in after_ticks])
                 if after_ticks
@@ -380,7 +386,8 @@ class EventCorrelationAnalyzer:
 
         except Exception as e:
             logger.error(
-                f"Error computing signal outcome for label {label.get('id')}: {e}", exc_info=True
+                f"Error computing signal outcome for label {label.get('id')}: {e}",
+                exc_info=True,
             )
             return None
 
@@ -442,7 +449,9 @@ class EventCorrelationAnalyzer:
                 if abs(price - prev_price) < self.price_stability_threshold:
                     stability_count += 1
                     if stability_count >= self.stability_consecutive_ticks:
-                        time_to_resolution = (tick_time - signal_time).total_seconds() / 60
+                        time_to_resolution = (
+                            tick_time - signal_time
+                        ).total_seconds() / 60
                 else:
                     stability_count = 0
 
@@ -491,11 +500,15 @@ class EventCorrelationAnalyzer:
                 for o in pattern_outcomes
                 if o.time_to_resolution_minutes is not None
             ]
-            avg_resolution = statistics.mean(resolution_times) if resolution_times else 0.0
+            avg_resolution = (
+                statistics.mean(resolution_times) if resolution_times else 0.0
+            )
 
             # Compute positive outcome rate (price went up)
             positive_outcomes = sum(1 for o in pattern_outcomes if o.max_price_move > 0)
-            positive_rate = positive_outcomes / len(pattern_outcomes) if pattern_outcomes else 0.0
+            positive_rate = (
+                positive_outcomes / len(pattern_outcomes) if pattern_outcomes else 0.0
+            )
 
             # Compute false positive rate for this pattern
             # (based on labels marked as "false signal" with notes mentioning this pattern)
@@ -506,11 +519,19 @@ class EventCorrelationAnalyzer:
                 if label.get("label_type") == "false signal"
                 and pattern_type.lower() in label.get("notes", "").lower()
             )
-            fp_rate = false_positives / total_pattern_labels if total_pattern_labels > 0 else 0.0
+            fp_rate = (
+                false_positives / total_pattern_labels
+                if total_pattern_labels > 0
+                else 0.0
+            )
 
             # Compute average volume change
-            volume_changes = [o.volume_after - o.volume_before for o in pattern_outcomes]
-            avg_volume_change = statistics.mean(volume_changes) if volume_changes else 0.0
+            volume_changes = [
+                o.volume_after - o.volume_before for o in pattern_outcomes
+            ]
+            avg_volume_change = (
+                statistics.mean(volume_changes) if volume_changes else 0.0
+            )
 
             # Get sample timestamps
             sample_timestamps = [o.signal_timestamp for o in pattern_outcomes[:5]]
@@ -528,7 +549,9 @@ class EventCorrelationAnalyzer:
 
         return pattern_stats
 
-    def _compute_resolution_curve(self, outcomes: List[SignalOutcome]) -> List[Tuple[int, float]]:
+    def _compute_resolution_curve(
+        self, outcomes: List[SignalOutcome]
+    ) -> List[Tuple[int, float]]:
         """
         Compute time-to-resolution cumulative curve.
 
@@ -631,10 +654,14 @@ class InterestingMomentsFinder:
         Args:
             history_db_path: Path to market history database
             labels_db_path: Path to labels database
-            price_acceleration_threshold: Minimum price change to consider acceleration (default: 0.05 = 5%)
-            volume_spike_multiplier: Volume multiplier over baseline to flag spike (default: 3.0)
-            imbalance_threshold: Distance from 0.5 to consider imbalanced (default: 0.15)
-            alert_clustering_window_minutes: Time window for clustering alerts (default: 5)
+            price_acceleration_threshold: Minimum price change to consider
+                acceleration (default: 0.05 = 5%)
+            volume_spike_multiplier: Volume multiplier over baseline to flag
+                spike (default: 3.0)
+            imbalance_threshold: Distance from 0.5 to consider imbalanced
+                (default: 0.15)
+            alert_clustering_window_minutes: Time window for clustering alerts
+                (default: 5)
             min_alert_cluster_size: Minimum alerts in window to flag cluster (default: 3)
         """
         self.history_db_path = history_db_path
@@ -685,28 +712,22 @@ class InterestingMomentsFinder:
             labels = fetch_history_labels(
                 start=start, end=end, limit=10000, db_path=self.labels_db_path
             )
-            markets = list(set(label["market_id"] for label in labels)) if labels else []
+            markets = (
+                list(set(label["market_id"] for label in labels)) if labels else []
+            )
 
         for mkt_id in markets:
             # Detect price accelerations
-            all_moments.extend(
-                self._detect_price_accelerations(mkt_id, start, end)
-            )
+            all_moments.extend(self._detect_price_accelerations(mkt_id, start, end))
 
             # Detect volume spikes
-            all_moments.extend(
-                self._detect_volume_spikes(mkt_id, start, end)
-            )
+            all_moments.extend(self._detect_volume_spikes(mkt_id, start, end))
 
             # Detect imbalance reversals
-            all_moments.extend(
-                self._detect_imbalance_reversals(mkt_id, start, end)
-            )
+            all_moments.extend(self._detect_imbalance_reversals(mkt_id, start, end))
 
         # Detect repeated alert firing across all markets
-        all_moments.extend(
-            self._detect_alert_clusters(market_id, start, end)
-        )
+        all_moments.extend(self._detect_alert_clusters(market_id, start, end))
 
         # Filter by severity and sort
         interesting = [m for m in all_moments if m.severity >= min_severity]
@@ -754,7 +775,9 @@ class InterestingMomentsFinder:
 
                 if price_change >= self.price_acceleration_threshold:
                     # Calculate severity based on how much it exceeds threshold
-                    severity = min(1.0, price_change / (self.price_acceleration_threshold * 2))
+                    severity = min(
+                        1.0, price_change / (self.price_acceleration_threshold * 2)
+                    )
 
                     moments.append(
                         InterestingMoment(
@@ -817,7 +840,11 @@ class InterestingMomentsFinder:
                 if volume >= baseline_volume * self.volume_spike_multiplier:
                     volume_ratio = volume / baseline_volume
                     # Calculate severity based on how much it exceeds threshold
-                    severity = min(1.0, (volume_ratio - self.volume_spike_multiplier) / self.volume_spike_multiplier)
+                    severity = min(
+                        1.0,
+                        (volume_ratio - self.volume_spike_multiplier)
+                        / self.volume_spike_multiplier,
+                    )
 
                     moments.append(
                         InterestingMoment(
@@ -891,7 +918,9 @@ class InterestingMomentsFinder:
                     ):
                         # Calculate how far it swung
                         swing_magnitude = abs(price - 0.5) + self.imbalance_threshold
-                        severity = min(1.0, swing_magnitude / 0.3)  # Normalize to 30% swing
+                        severity = min(
+                            1.0, swing_magnitude / 0.3
+                        )  # Normalize to 30% swing
 
                         moments.append(
                             InterestingMoment(
@@ -973,17 +1002,24 @@ class InterestingMomentsFinder:
                 # Check if cluster size meets threshold
                 if len(events_in_window) >= self.min_alert_cluster_size:
                     # Calculate severity based on cluster size
-                    severity = min(1.0, len(events_in_window) / (self.min_alert_cluster_size * 2))
+                    severity = min(
+                        1.0, len(events_in_window) / (self.min_alert_cluster_size * 2)
+                    )
 
                     # Get unique label types in cluster
                     label_types = set(e["label_type"] for e in events_in_window)
+
+                    reason = (
+                        f"{len(events_in_window)} alerts fired within "
+                        f"{self.alert_clustering_window_minutes}m"
+                    )
 
                     moments.append(
                         InterestingMoment(
                             timestamp=start_label["timestamp"],
                             market_id=start_label["market_id"],
                             moment_type="alert_cluster",
-                            reason=f"{len(events_in_window)} alerts fired within {self.alert_clustering_window_minutes}m",
+                            reason=reason,
                             severity=severity,
                             metrics={
                                 "alert_count": len(events_in_window),

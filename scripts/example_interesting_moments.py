@@ -171,10 +171,14 @@ def run_interesting_moments_analysis():
     )
 
     print("Configuration:")
-    print(f"  - Price acceleration threshold: {finder.price_acceleration_threshold:.1%}")
+    print(
+        f"  - Price acceleration threshold: {finder.price_acceleration_threshold:.1%}"
+    )
     print(f"  - Volume spike multiplier: {finder.volume_spike_multiplier}x")
     print(f"  - Imbalance threshold: {finder.imbalance_threshold:.1%}")
-    print(f"  - Alert clustering window: {finder.alert_clustering_window_minutes} minutes")
+    print(
+        f"  - Alert clustering window: {finder.alert_clustering_window_minutes} minutes"
+    )
     print(f"  - Min alert cluster size: {finder.min_alert_cluster_size}")
     print()
 
@@ -240,7 +244,9 @@ def run_interesting_moments_analysis():
     print("=" * 80)
     print()
     print("These timestamps are flagged as potentially interesting for manual review.")
-    print("They exhibit unusual patterns that may indicate significant market activity.")
+    print(
+        "They exhibit unusual patterns that may indicate significant market activity."
+    )
 
 
 def main():
