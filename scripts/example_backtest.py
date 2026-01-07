@@ -90,7 +90,7 @@ def print_results_summary(stats: Dict[str, Any], db_path: str):
                     )
                 elif strategy == "depth_scanner" and signal:
                     print(f"    Signal: {signal.get('signal_type', 'unknown')}")
-                notes = result['notes']
+                notes = result["notes"]
                 print(f"    Notes: {notes[:60]}{'...' if len(notes) > 60 else ''}")
 
     print_separator()

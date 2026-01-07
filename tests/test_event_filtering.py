@@ -37,7 +37,7 @@ class TestPriceAlertEventFiltering(unittest.TestCase):
     def test_fetch_price_alerts_by_market_id(self):
         """Test fetching price alert events filtered by market ID."""
         base_time = datetime.now()
-        
+
         # Create alerts for different markets
         alert1 = {
             "timestamp": base_time,
@@ -59,23 +59,22 @@ class TestPriceAlertEventFiltering(unittest.TestCase):
             "mode": "test",
             "latency_ms": 150,
         }
-        
+
         log_price_alert_event(alert1, self.test_db_path)
         log_price_alert_event(alert2, self.test_db_path)
-        
+
         # Fetch only market_A alerts
         alerts = fetch_price_alert_events(
-            market_id="market_A", 
-            db_path=self.test_db_path
+            market_id="market_A", db_path=self.test_db_path
         )
-        
+
         self.assertEqual(len(alerts), 1)
         self.assertEqual(alerts[0]["market_id"], "market_A")
 
     def test_fetch_price_alerts_by_date_range(self):
         """Test fetching price alert events filtered by date range."""
         base_time = datetime.now()
-        
+
         # Create alerts at different times
         alert1 = {
             "timestamp": base_time - timedelta(days=2),
@@ -97,18 +96,16 @@ class TestPriceAlertEventFiltering(unittest.TestCase):
             "mode": "test",
             "latency_ms": 150,
         }
-        
+
         log_price_alert_event(alert1, self.test_db_path)
         log_price_alert_event(alert2, self.test_db_path)
-        
+
         # Fetch only recent alerts
         start = (base_time - timedelta(days=1)).isoformat()
         alerts = fetch_price_alert_events(
-            market_id="market_A",
-            start=start,
-            db_path=self.test_db_path
+            market_id="market_A", start=start, db_path=self.test_db_path
         )
-        
+
         self.assertEqual(len(alerts), 1)
         self.assertEqual(alerts[0]["alert_id"], "alert_new")
 
@@ -130,7 +127,7 @@ class TestDepthEventFiltering(unittest.TestCase):
     def test_fetch_depth_events_by_market_id(self):
         """Test fetching depth events filtered by market ID."""
         base_time = datetime.now()
-        
+
         # Create depth events for different markets
         event1 = {
             "timestamp": base_time,
@@ -148,16 +145,13 @@ class TestDepthEventFiltering(unittest.TestCase):
             "threshold_hit": "gap > 0.08",
             "mode": "test",
         }
-        
+
         log_depth_event(event1, self.test_db_path)
         log_depth_event(event2, self.test_db_path)
-        
+
         # Fetch only market_A events
-        events = fetch_depth_events(
-            market_id="market_A",
-            db_path=self.test_db_path
-        )
-        
+        events = fetch_depth_events(market_id="market_A", db_path=self.test_db_path)
+
         self.assertEqual(len(events), 1)
         self.assertEqual(events[0]["market_id"], "market_A")
         # Verify metrics were deserialized
@@ -167,7 +161,7 @@ class TestDepthEventFiltering(unittest.TestCase):
     def test_fetch_depth_events_by_date_range(self):
         """Test fetching depth events filtered by date range."""
         base_time = datetime.now()
-        
+
         # Create events at different times
         event1 = {
             "timestamp": base_time - timedelta(days=2),
@@ -185,25 +179,23 @@ class TestDepthEventFiltering(unittest.TestCase):
             "threshold_hit": "gap > 0.08",
             "mode": "test",
         }
-        
+
         log_depth_event(event1, self.test_db_path)
         log_depth_event(event2, self.test_db_path)
-        
+
         # Fetch only recent events
         start = (base_time - timedelta(days=1)).isoformat()
         events = fetch_depth_events(
-            market_id="market_A",
-            start=start,
-            db_path=self.test_db_path
+            market_id="market_A", start=start, db_path=self.test_db_path
         )
-        
+
         self.assertEqual(len(events), 1)
         self.assertEqual(events[0]["signal_type"], "large_gap")
 
     def test_fetch_depth_events_combined_filters(self):
         """Test fetching depth events with multiple filters combined."""
         base_time = datetime.now()
-        
+
         # Create various events
         events_to_log = [
             {
@@ -231,21 +223,18 @@ class TestDepthEventFiltering(unittest.TestCase):
                 "mode": "test",
             },
         ]
-        
+
         for event in events_to_log:
             log_depth_event(event, self.test_db_path)
-        
+
         # Fetch with market_id and date range
         start = (base_time - timedelta(days=1)).isoformat()
         end = base_time.isoformat()
-        
+
         events = fetch_depth_events(
-            market_id="market_A",
-            start=start,
-            end=end,
-            db_path=self.test_db_path
+            market_id="market_A", start=start, end=end, db_path=self.test_db_path
         )
-        
+
         # Should only get the market_A event within date range
         self.assertEqual(len(events), 1)
         self.assertEqual(events[0]["market_id"], "market_A")

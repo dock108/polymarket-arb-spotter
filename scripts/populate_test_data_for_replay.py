@@ -20,20 +20,20 @@ def populate_test_data():
     """Populate database with test events for replay view."""
     print("Initializing database...")
     init_db()
-    
+
     # Create a test market
     test_market_id = "test_market_timeline_overlay"
     base_time = datetime.now()
-    
+
     print(f"\nCreating test data for market: {test_market_id}")
-    
+
     # Create some historical ticks
     print("\n1. Creating historical price ticks...")
     for i in range(10):
-        timestamp = base_time - timedelta(hours=10-i)
+        timestamp = base_time - timedelta(hours=10 - i)
         yes_price = 0.45 + (i * 0.02)  # Gradually increasing price
         no_price = 1.0 - yes_price
-        
+
         append_tick(
             market_id=test_market_id,
             yes_price=yes_price,
@@ -42,7 +42,7 @@ def populate_test_data():
             timestamp=timestamp,
         )
     print(f"   ✓ Created 10 price ticks")
-    
+
     # Create price alert events
     print("\n2. Creating price alert events...")
     alerts = [
@@ -77,11 +77,11 @@ def populate_test_data():
             "latency_ms": 95,
         },
     ]
-    
+
     for alert in alerts:
         log_price_alert_event(alert)
     print(f"   ✓ Created {len(alerts)} price alerts")
-    
+
     # Create depth signal events
     print("\n3. Creating depth signal events...")
     depth_events = [
@@ -107,18 +107,18 @@ def populate_test_data():
             "metrics": {
                 "total_yes_depth": 2000,
                 "total_no_depth": 500,
-                "imbalance": 1500
+                "imbalance": 1500,
             },
             "signal_type": "strong_imbalance",
             "threshold_hit": "imbalance > 1000",
             "mode": "test",
         },
     ]
-    
+
     for event in depth_events:
         log_depth_event(event)
     print(f"   ✓ Created {len(depth_events)} depth signals")
-    
+
     # Create user labels
     print("\n4. Creating user labels...")
     labels = [
@@ -141,14 +141,14 @@ def populate_test_data():
             "notes": "Arbitrage opportunity collapsed",
         },
     ]
-    
+
     for label in labels:
         save_history_label(label)
     print(f"   ✓ Created {len(labels)} user labels")
-    
-    print("\n" + "="*60)
+
+    print("\n" + "=" * 60)
     print("✅ Test data population complete!")
-    print("="*60)
+    print("=" * 60)
     print(f"\nTest market ID: {test_market_id}")
     print(f"Time range: {base_time - timedelta(hours=10)} to {base_time}")
     print("\nTo view the data:")

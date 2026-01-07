@@ -27,9 +27,6 @@ def setup_logger(
 
     Returns:
         Configured logger instance
-
-    TODO: Add JSON formatting for structured logs
-    TODO: Add context managers for log contexts
     """
     logger = logging.getLogger(name)
     logger.setLevel(getattr(logging, level.upper()))
@@ -203,7 +200,12 @@ def _get_table_columns(db: Database, table_name: str) -> List[str]:
         ValueError: If table_name is not in the allowed list
     """
     # Whitelist of allowed table names to prevent SQL injection
-    allowed_tables = {"arbitrage_events", "price_alert_events", "depth_events", "history_labels"}
+    allowed_tables = {
+        "arbitrage_events",
+        "price_alert_events",
+        "depth_events",
+        "history_labels",
+    }
     if table_name not in allowed_tables:
         raise ValueError(f"Invalid table name: {table_name}")
 
@@ -553,9 +555,7 @@ def fetch_depth_events(
         return []
 
 
-def save_history_label(
-    data: Dict[str, Any], db_path: str = _DB_PATH
-) -> None:
+def save_history_label(data: Dict[str, Any], db_path: str = _DB_PATH) -> None:
     """
     Save a history label to the database.
 

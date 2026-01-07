@@ -217,9 +217,7 @@ class TestReplayMarket(TestHistoricalReplayEngine):
         def on_tick(tick: Dict[str, Any]):
             received_ticks.append(tick)
 
-        count = engine.replay_market(
-            "market_1", start=start, end=end, on_tick=on_tick
-        )
+        count = engine.replay_market("market_1", start=start, end=end, on_tick=on_tick)
 
         # Should get ticks at t=2,3,4,5 (4 ticks)
         self.assertEqual(count, 4)
@@ -399,9 +397,7 @@ class TestReplayMarkets(TestHistoricalReplayEngine):
         def on_tick(tick: Dict[str, Any]):
             received_ticks.append(tick)
 
-        results = engine.replay_markets(
-            ["market_1", "market_2"], on_tick=on_tick
-        )
+        results = engine.replay_markets(["market_1", "market_2"], on_tick=on_tick)
 
         self.assertEqual(results["market_1"], 10)
         self.assertEqual(results["market_2"], 5)

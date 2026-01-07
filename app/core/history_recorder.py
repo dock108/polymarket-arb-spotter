@@ -87,9 +87,7 @@ class HistoryRecorder:
             daemon=True,
         )
         self._worker_thread.start()
-        logger.info(
-            f"History recorder started (sampling: {self.sampling_ms}ms)"
-        )
+        logger.info(f"History recorder started (sampling: {self.sampling_ms}ms)")
 
     def stop(self) -> None:
         """

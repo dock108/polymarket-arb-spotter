@@ -132,7 +132,9 @@ def run_analysis():
             print(f"\nPattern: {pattern_type}")
             print(f"  Total occurrences: {stats.total_occurrences}")
             price_pct = stats.avg_price_move * 100
-            print(f"  Average price move: {stats.avg_price_move:.4f} ({price_pct:.2f}%)")
+            print(
+                f"  Average price move: {stats.avg_price_move:.4f} ({price_pct:.2f}%)"
+            )
             print(f"  Positive outcome rate: {stats.positive_outcome_rate:.2%}")
             print(f"  False positive rate: {stats.false_positive_rate:.2%}")
             print(

@@ -276,9 +276,7 @@ class TestBacktestEngine(unittest.TestCase):
         engine.set_arb_detector(detector)
 
         # Run backtest on market with arbitrage opportunities
-        stats = engine.run_backtest(
-            market_ids=["market_arb"], limit_per_market=10
-        )
+        stats = engine.run_backtest(market_ids=["market_arb"], limit_per_market=10)
 
         # Verify statistics
         self.assertGreater(stats["ticks_processed"], 0)
@@ -297,9 +295,7 @@ class TestBacktestEngine(unittest.TestCase):
         engine.add_price_alert("market_price", "above", 0.70)
 
         # Run backtest on market with price changes
-        stats = engine.run_backtest(
-            market_ids=["market_price"], limit_per_market=10
-        )
+        stats = engine.run_backtest(market_ids=["market_price"], limit_per_market=10)
 
         # Verify statistics
         self.assertGreater(stats["ticks_processed"], 0)
@@ -371,17 +367,15 @@ class TestBacktestEngine(unittest.TestCase):
         engine.add_price_alert("market_price", "above", 0.70)
 
         # Run backtest first time
-        stats1 = engine.run_backtest(
-            market_ids=["market_price"], limit_per_market=10
-        )
+        stats1 = engine.run_backtest(market_ids=["market_price"], limit_per_market=10)
         self.assertGreater(stats1["price_alerts_triggered"], 0)
 
         # Run backtest again - should trigger again
-        stats2 = engine.run_backtest(
-            market_ids=["market_price"], limit_per_market=10
-        )
+        stats2 = engine.run_backtest(market_ids=["market_price"], limit_per_market=10)
         self.assertGreater(stats2["price_alerts_triggered"], 0)
-        self.assertEqual(stats1["price_alerts_triggered"], stats2["price_alerts_triggered"])
+        self.assertEqual(
+            stats1["price_alerts_triggered"], stats2["price_alerts_triggered"]
+        )
 
 
 if __name__ == "__main__":

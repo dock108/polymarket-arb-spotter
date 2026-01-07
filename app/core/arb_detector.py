@@ -1,13 +1,9 @@
 """
 Arbitrage detection engine for Polymarket markets.
 
-TODO: Implement market data fetching
-TODO: Implement arbitrage opportunity detection algorithms
-TODO: Add support for multi-outcome markets
-TODO: Add support for cross-market arbitrage
-TODO: Implement profit calculation with fees
-TODO: Add risk assessment for detected opportunities
-TODO: Implement real-time monitoring
+Detects arbitrage opportunities by analyzing market prices and calculates
+expected profit with fee considerations. Supports two-way arbitrage detection
+and includes risk assessment for detected opportunities.
 """
 
 from dataclasses import dataclass
@@ -84,9 +80,6 @@ class ArbitrageDetector:
 
         Args:
             db_path: Path to SQLite database
-
-        TODO: Initialize connection to Polymarket API
-        TODO: Load historical data for analysis
         """
         self.db_path = db_path
         self._conn = None  # For in-memory database persistence
@@ -94,12 +87,7 @@ class ArbitrageDetector:
         logger.info("ArbitrageDetector initialized")
 
     def _init_database(self):
-        """
-        Initialize SQLite database for storing opportunities.
-
-        TODO: Add more comprehensive schema
-        TODO: Add indices for performance
-        """
+        """Initialize SQLite database for storing opportunities."""
         if self.db_path != ":memory:":
             Path(self.db_path).parent.mkdir(parents=True, exist_ok=True)
 
@@ -437,9 +425,6 @@ class ArbitrageDetector:
 
         Returns:
             List of opportunity dictionaries
-
-        TODO: Add filtering by time range
-        TODO: Add filtering by profitability
         """
         try:
             # Use persistent connection for in-memory database

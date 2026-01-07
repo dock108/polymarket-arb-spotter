@@ -127,15 +127,14 @@ class ReplayArbitrageAnalyzer:
 
         if self.opportunities:
             total_profit = sum(o["expected_profit"] for o in self.opportunities)
-            avg_return = (
-                sum(o["expected_return_pct"] for o in self.opportunities)
-                / len(self.opportunities)
-            )
+            avg_return = sum(
+                o["expected_return_pct"] for o in self.opportunities
+            ) / len(self.opportunities)
             print("\nProfitability:")
             print(f"  Total expected profit: ${total_profit:.2f}")
             print(f"  Average return: {avg_return:.2f}%")
-            market_count = len(self.stats['markets_analyzed'])
-            opp_per_market = self.stats['opportunities_found'] / market_count
+            market_count = len(self.stats["markets_analyzed"])
+            opp_per_market = self.stats["opportunities_found"] / market_count
             print(f"  Opportunities per market: {opp_per_market:.2f}")
 
         if self.stats["start_time"] and self.stats["end_time"]:
@@ -144,7 +143,7 @@ class ReplayArbitrageAnalyzer:
             ).total_seconds()
             print("\nTiming:")
             print(f"  Duration: {duration:.2f}s")
-            throughput = self.stats['ticks_processed'] / duration
+            throughput = self.stats["ticks_processed"] / duration
             print(f"  Throughput: {throughput:.2f} ticks/sec")
 
         print("=" * 60)

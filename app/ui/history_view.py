@@ -11,7 +11,7 @@ from typing import Any, Dict
 import pandas as pd
 import streamlit as st
 
-from app.core.logger import fetch_recent, logger
+from app.core.logger import fetch_recent
 
 
 def render_history_view():

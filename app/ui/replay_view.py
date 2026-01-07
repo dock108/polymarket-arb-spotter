@@ -195,13 +195,13 @@ def _render_price_chart_tab(
         start=start_date.isoformat(),
         end=end_date.isoformat(),
     )
-    
+
     alerts = fetch_price_alert_events(
         market_id=market_id,
         start=start_date.isoformat(),
         end=end_date.isoformat(),
     )
-    
+
     depth_signals = fetch_depth_events(
         market_id=market_id,
         start=start_date.isoformat(),
@@ -210,63 +210,69 @@ def _render_price_chart_tab(
 
     # Combine all events into a unified timeline
     all_events = []
-    
+
     # Add labels
     for label in labels:
-        all_events.append({
-            "timestamp": label["timestamp"],
-            "event_type": "Label",
-            "detail": label["label_type"],
-            "notes": label.get("notes", ""),
-            "emoji": {
-                "news-driven move": "📰",
-                "whale entry": "🐋",
-                "arb collapse": "📉",
-                "false signal": "❌",
-            }.get(label["label_type"], "🏷️")
-        })
-    
+        all_events.append(
+            {
+                "timestamp": label["timestamp"],
+                "event_type": "Label",
+                "detail": label["label_type"],
+                "notes": label.get("notes", ""),
+                "emoji": {
+                    "news-driven move": "📰",
+                    "whale entry": "🐋",
+                    "arb collapse": "📉",
+                    "false signal": "❌",
+                }.get(label["label_type"], "🏷️"),
+            }
+        )
+
     # Add alerts
     for alert in alerts:
         direction = alert.get("direction", "")
         target_price = alert.get("target_price", 0)
-        all_events.append({
-            "timestamp": alert["timestamp"],
-            "event_type": "Price Alert",
-            "detail": f"{direction} {target_price:.3f}",
-            "notes": f"Triggered at {alert.get('trigger_price', 0):.3f}",
-            "emoji": "🔔"
-        })
-    
+        all_events.append(
+            {
+                "timestamp": alert["timestamp"],
+                "event_type": "Price Alert",
+                "detail": f"{direction} {target_price:.3f}",
+                "notes": f"Triggered at {alert.get('trigger_price', 0):.3f}",
+                "emoji": "🔔",
+            }
+        )
+
     # Add depth signals
     for depth in depth_signals:
         signal_type = depth.get("signal_type", "")
         threshold = depth.get("threshold_hit", "")
-        all_events.append({
-            "timestamp": depth["timestamp"],
-            "event_type": "Depth Signal",
-            "detail": signal_type,
-            "notes": threshold,
-            "emoji": {
-                "thin_depth": "📊",
-                "large_gap": "↔️",
-                "strong_imbalance": "⚖️",
-            }.get(signal_type, "📈")
-        })
+        all_events.append(
+            {
+                "timestamp": depth["timestamp"],
+                "event_type": "Depth Signal",
+                "detail": signal_type,
+                "notes": threshold,
+                "emoji": {
+                    "thin_depth": "📊",
+                    "large_gap": "↔️",
+                    "strong_imbalance": "⚖️",
+                }.get(signal_type, "📈"),
+            }
+        )
 
     if all_events:
         st.markdown("### 🎯 Events Timeline (Labels + Alerts + Depth Signals)")
-        
+
         # Create a DataFrame for all events
         events_df = pd.DataFrame(all_events)
         events_df["timestamp"] = pd.to_datetime(events_df["timestamp"])
         events_df = events_df.sort_values("timestamp", ascending=False)
-        
+
         # Display as table
         display_df = events_df[["timestamp", "event_type", "detail", "notes"]].copy()
         display_df.columns = ["Time", "Type", "Detail", "Notes"]
         st.dataframe(display_df, use_container_width=True)
-        
+
         # Show events on timeline with visual markers
         st.markdown("#### 📍 Event Markers")
         for _, event in events_df.iterrows():
@@ -275,7 +281,7 @@ def _render_price_chart_tab(
             detail = event["detail"]
             notes = event.get("notes", "")
             emoji = event.get("emoji", "📌")
-            
+
             st.text(
                 f"{emoji} {timestamp.strftime('%Y-%m-%d %H:%M:%S')} - {event_type}: {detail}"
                 + (f" - {notes}" if notes else "")
@@ -393,9 +399,7 @@ def _render_annotation_tab(
                     st.write(f"**Notes:** {label['notes']}")
 
                 # Delete button
-                if st.button(
-                    "🗑️ Delete", key=f"delete_{label['id']}", type="secondary"
-                ):
+                if st.button("🗑️ Delete", key=f"delete_{label['id']}", type="secondary"):
                     if delete_history_label(label["id"]):
                         st.success("Label deleted successfully!")
                         st.rerun()
@@ -489,9 +493,7 @@ def _render_labels_tab(market_id: str, start_date: datetime, end_date: datetime)
             display_cols.insert(0, "id")
 
         display_df = labels_df[display_cols].copy()
-        display_df.columns = [
-            col.replace("_", " ").title() for col in display_cols
-        ]
+        display_df.columns = [col.replace("_", " ").title() for col in display_cols]
 
         st.dataframe(display_df, use_container_width=True)
 
@@ -500,7 +502,7 @@ def _render_labels_tab(market_id: str, start_date: datetime, end_date: datetime)
             csv = display_df.to_csv(index=False)
             # Truncate market ID for filename to avoid overly long filenames
             market_id_short = market_id[:MAX_MARKET_ID_FILENAME_LENGTH]
-            timestamp_str = datetime.now().strftime('%Y%m%d_%H%M%S')
+            timestamp_str = datetime.now().strftime("%Y%m%d_%H%M%S")
             filename = f"labels_{market_id_short}_{timestamp_str}.csv"
             st.download_button(
                 label="Download CSV",

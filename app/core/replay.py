@@ -227,9 +227,7 @@ class HistoricalReplayEngine:
                     try:
                         on_tick(tick)
                     except Exception as e:
-                        logger.error(
-                            f"Error in on_tick callback: {e}", exc_info=True
-                        )
+                        logger.error(f"Error in on_tick callback: {e}", exc_info=True)
 
                 previous_timestamp = tick["timestamp"]
                 replayed_count += 1
@@ -641,7 +639,9 @@ class BacktestEngine:
 
         # Check if depth scanner functions are available
         if analyze_depth is None or detect_depth_signals is None:
-            logger.warning("Depth scanner functions not available, skipping depth analysis")
+            logger.warning(
+                "Depth scanner functions not available, skipping depth analysis"
+            )
             return
 
         try:
@@ -677,9 +677,7 @@ class BacktestEngine:
                         )
 
         except Exception as e:
-            logger.error(
-                f"Error processing tick for depth scanner: {e}", exc_info=True
-            )
+            logger.error(f"Error processing tick for depth scanner: {e}", exc_info=True)
 
     def _process_tick(self, tick: Dict[str, Any]) -> None:
         """

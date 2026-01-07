@@ -11,7 +11,6 @@ import streamlit as st
 
 from app.core.arb_detector import ArbitrageDetector
 from app.core.config import config
-from app.core.logger import logger
 
 
 def render_settings_view():
