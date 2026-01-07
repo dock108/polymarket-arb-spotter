@@ -35,7 +35,7 @@ from typing import Dict, Any
 # Add parent directory to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from app.core.replay import BacktestEngine, create_backtest_engine  # noqa: E402
+from app.core.replay import create_backtest_engine  # noqa: E402
 from app.core.arb_detector import ArbitrageDetector  # noqa: E402
 from app.core.history_store import get_backtest_results  # noqa: E402
 
