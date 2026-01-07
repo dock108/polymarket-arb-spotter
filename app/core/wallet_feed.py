@@ -8,6 +8,7 @@ with retry and duplication protection.
 
 import json
 import time
+from collections import deque
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -69,6 +70,7 @@ def _ensure_table(db: Database) -> None:
     Args:
         db: Database instance
     """
+    # Create table if it doesn't exist
     if "wallet_trades" not in db.table_names():
         db["wallet_trades"].create(
             {
@@ -82,26 +84,28 @@ def _ensure_table(db: Database) -> None:
             },
             pk="id",
         )
-        # Create unique index on tx_hash for duplication protection
-        db["wallet_trades"].create_index(
-            ["tx_hash"],
-            index_name="idx_tx_hash",
-            unique=True,
-            if_not_exists=True,
-        )
-        # Create index on (wallet, timestamp) for efficient queries
-        db["wallet_trades"].create_index(
-            ["wallet", "timestamp"],
-            index_name="idx_wallet_timestamp",
-            if_not_exists=True,
-        )
-        # Create index on (market_id, timestamp) for efficient queries
-        db["wallet_trades"].create_index(
-            ["market_id", "timestamp"],
-            index_name="idx_market_timestamp",
-            if_not_exists=True,
-        )
-        logger.debug("Created wallet_trades table with indexes")
+        logger.debug("Created wallet_trades table")
+    
+    # Ensure indexes exist (independent of table creation)
+    # Create unique index on tx_hash for duplication protection
+    db["wallet_trades"].create_index(
+        ["tx_hash"],
+        index_name="idx_tx_hash",
+        unique=True,
+        if_not_exists=True,
+    )
+    # Create index on (wallet, timestamp) for efficient queries
+    db["wallet_trades"].create_index(
+        ["wallet", "timestamp"],
+        index_name="idx_wallet_timestamp",
+        if_not_exists=True,
+    )
+    # Create index on (market_id, timestamp) for efficient queries
+    db["wallet_trades"].create_index(
+        ["market_id", "timestamp"],
+        index_name="idx_market_timestamp",
+        if_not_exists=True,
+    )
 
 
 class WalletFeed:
@@ -476,7 +480,8 @@ class WalletFeed:
             f"poll_interval={poll_interval}s)"
         )
 
-        last_seen_tx_hashes: Set[str] = set()
+        # Use a deque with maxlen for automatic size limiting
+        last_seen_tx_hashes: deque = deque(maxlen=1000)
 
         while True:
             try:
@@ -499,11 +504,8 @@ class WalletFeed:
                         except Exception as e:
                             logger.error(f"Error in trade callback: {e}")
 
-                        last_seen_tx_hashes.add(trade.tx_hash)
-
-                # Cleanup old hashes (keep last 1000)
-                if len(last_seen_tx_hashes) > 1000:
-                    last_seen_tx_hashes = set(list(last_seen_tx_hashes)[-1000:])
+                        # Add to seen hashes (deque automatically removes oldest when full)
+                        last_seen_tx_hashes.append(trade.tx_hash)
 
                 time.sleep(poll_interval)
 
