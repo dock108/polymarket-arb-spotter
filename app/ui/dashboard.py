@@ -21,6 +21,7 @@ from app.ui.patterns_view import render_patterns_view
 from app.ui.price_alerts_view import render_price_alerts_view
 from app.ui.replay_view import render_replay_view
 from app.ui.settings_view import render_settings_view
+from app.ui.wallets_view import render_wallets_view
 
 # Add project root to Python path if running directly
 if __name__ == "__main__":
@@ -47,6 +48,7 @@ def render_dashboard():
             "Replay & Label",
             "Depth Monitor",
             "Price Alerts",
+            "Wallet Intelligence",
             "Settings",
         ],
     )
@@ -76,6 +78,8 @@ def render_dashboard():
         render_depth_view()
     elif page == "Price Alerts":
         render_price_alerts_view()
+    elif page == "Wallet Intelligence":
+        render_wallets_view()
     elif page == "Settings":
         render_settings_view()
 
