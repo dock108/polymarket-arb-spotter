@@ -6,6 +6,7 @@ A Python tool for detecting arbitrage opportunities in Polymarket prediction mar
 
 - **Real-time Detection**: Monitor Polymarket markets for arbitrage opportunities
 - **Wallet Event Ingestion**: Track and analyze wallet transactions and trades
+- **Wallet Profile Analytics**: Analyze trader performance and identify "smart wallets"
 - **Historical Replay Engine**: Test algorithms against past markets with configurable playback speeds
 - **Backtest Alerts**: Dry-run simulation to evaluate detection tool performance on historical data
 - **Price Alert Watcher**: Subscribe to markets and get alerted when prices cross thresholds
@@ -80,6 +81,15 @@ python scripts/run_price_alerts.py
 
 See [docs/price_alerts_usage.md](docs/price_alerts_usage.md) for detailed usage.
 
+### Wallet Profile Analytics
+
+```bash
+# Analyze wallet trading performance
+python scripts/example_wallet_profiles.py
+```
+
+Track and analyze wallet performance to identify "smart wallets" based on win rate, ROI, and trading patterns. See [docs/wallet_profiles.md](docs/wallet_profiles.md) for detailed documentation.
+
 ### Historical Replay Engine
 
 ```bash
@@ -127,6 +137,7 @@ See `.env.example` for all available options.
 | Document | Description |
 |----------|-------------|
 | [Wallet Feed](docs/wallet_feed.md) | Wallet transaction ingestion and tracking |
+| [Wallet Profiles](docs/wallet_profiles.md) | Wallet performance analytics and smart wallet detection |
 | [Replay Engine](docs/replay_engine.md) | Historical data replay and backtesting |
 | [Backtest Alerts](docs/backtest_alerts.md) | Dry-run simulation for tool evaluation |
 | [Notification Setup](docs/notifications.md) | Configure Telegram/email alerts |
