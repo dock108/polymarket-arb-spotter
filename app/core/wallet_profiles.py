@@ -74,9 +74,13 @@ def _calculate_wallet_stats(
 
     # Basic statistics
     total_trades = len(trades)
-    total_price = sum(float(t.get("price", 0)) for t in trades)
-    avg_entry_price = total_price / total_trades if total_trades > 0 else 0.0
     total_volume = sum(float(t.get("size", 0)) for t in trades)
+
+    # Calculate volume-weighted average entry price
+    weighted_price_sum = sum(
+        float(t.get("price", 0)) * float(t.get("size", 0)) for t in trades
+    )
+    avg_entry_price = weighted_price_sum / total_volume if total_volume > 0 else 0.0
 
     # Track markets and positions
     markets_traded = list(set(t.get("market_id") for t in trades))

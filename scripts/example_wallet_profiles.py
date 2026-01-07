@@ -8,6 +8,8 @@ This script shows how to:
 3. Analyze wallet trading patterns
 """
 
+import os
+import tempfile
 from datetime import datetime
 
 from app.core.wallet_feed import WalletFeed, WalletTrade
@@ -21,12 +23,15 @@ from app.core.wallet_profiles import (
 def main():
     """Demonstrate wallet profile functionality."""
 
-    # Use a test database for demonstration
-    db_path = "data/example_wallet_profiles.db"
+    # Use a temporary database for demonstration to avoid conflicts
+    temp_dir = tempfile.gettempdir()
+    db_path = os.path.join(temp_dir, "example_wallet_profiles.db")
 
     print("=" * 70)
     print("Wallet Profile Analytics Demo")
     print("=" * 70)
+    print(f"Using database: {db_path}")
+    print()
 
     # Initialize wallet feed
     feed = WalletFeed(db_path=db_path)
@@ -256,6 +261,11 @@ def main():
     print("\n" + "=" * 70)
     print("Demo completed successfully!")
     print("=" * 70)
+
+    # Clean up temporary database
+    if os.path.exists(db_path):
+        os.remove(db_path)
+        print(f"\nCleaned up temporary database: {db_path}")
 
 
 if __name__ == "__main__":

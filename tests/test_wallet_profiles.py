@@ -175,7 +175,8 @@ class TestCalculateWalletStats(unittest.TestCase):
         stats = _calculate_wallet_stats(trades)
 
         self.assertEqual(stats["total_trades"], 2)
-        self.assertEqual(stats["avg_entry_price"], 0.50)  # (0.60 + 0.40) / 2
+        # Volume-weighted avg: (0.60*100 + 0.40*200) / 300 = 0.4666...
+        self.assertAlmostEqual(stats["avg_entry_price"], 0.4667, places=3)
         self.assertEqual(stats["total_volume"], 300.0)  # 100 + 200
         self.assertEqual(len(stats["markets_traded"]), 2)
 
@@ -201,7 +202,7 @@ class TestCalculateWalletStats(unittest.TestCase):
         self.assertEqual(stats["win_rate"], 100.0)  # 1 winning trade out of 1
         # Profit = size * (1 - price) = 100 * (1 - 0.60) = 40
         self.assertAlmostEqual(stats["total_profit"], 40.0, places=2)
-        # ROI = (40 / 100) * 100 = 40%
+        # ROI = (total_profit / total_volume) * 100 = (40 / 100) * 100 = 40%
         self.assertAlmostEqual(stats["avg_roi"], 40.0, places=2)
 
     def test_calculate_stats_with_outcomes_losing(self):
@@ -286,8 +287,8 @@ class TestGetWalletProfile(TestWalletProfiles):
         self.assertIsNotNone(profile)
         self.assertEqual(profile.wallet, "0x1111111111111111")
         self.assertEqual(profile.total_trades, 3)
-        # Avg price: (0.65 + 0.70 + 0.40) / 3 = 0.583...
-        self.assertAlmostEqual(profile.avg_entry_price, 0.583, places=2)
+        # Volume-weighted avg: (0.65*100 + 0.70*50 + 0.40*200) / 350 = 0.5143
+        self.assertAlmostEqual(profile.avg_entry_price, 0.5143, places=3)
         self.assertEqual(len(profile.markets_traded), 2)  # market_1 and market_2
         self.assertIn("market_1", profile.markets_traded)
         self.assertIn("market_2", profile.markets_traded)
@@ -309,7 +310,7 @@ class TestGetWalletProfile(TestWalletProfiles):
 
         self.assertIsNotNone(profile)
         self.assertEqual(profile.realized_outcomes, 2)
-        # Win rate: 3 trades in 2 markets, 2 YES wins + 1 NO win = 100% win rate
+        # Win rate: 3 trades across 2 resolved markets, all on winning side = 100%
         self.assertEqual(profile.win_rate, 100.0)
         self.assertGreater(profile.total_profit, 0)
 
