@@ -403,3 +403,193 @@ def get_market_ids(
     except Exception as e:
         logger.error(f"Error getting market IDs: {e}", exc_info=True)
         return []
+
+
+def _ensure_backtest_table(db: Database) -> None:
+    """
+    Ensure the backtest_results table exists with proper schema and indexes.
+
+    Args:
+        db: Database instance
+    """
+    if "backtest_results" not in db.table_names():
+        db["backtest_results"].create(
+            {
+                "strategy": str,
+                "market_id": str,
+                "timestamp": str,
+                "signal": str,  # JSON string for signal data
+                "simulated_outcome": str,
+                "notes": str,
+            },
+            pk="id",
+        )
+        # Create index on (strategy, market_id, timestamp) for efficient queries
+        db["backtest_results"].create_index(
+            ["strategy", "market_id", "timestamp"],
+            index_name="idx_backtest_strategy_market_time",
+            if_not_exists=True,
+        )
+        logger.debug("Created backtest_results table with indexes")
+
+
+def append_backtest_result(
+    strategy: str,
+    market_id: str,
+    timestamp: Union[datetime, str],
+    signal: Dict[str, Any],
+    simulated_outcome: str,
+    notes: str = "",
+    db_path: str = _HISTORY_DB_PATH,
+) -> None:
+    """
+    Append a backtest result to the store.
+
+    Args:
+        strategy: Strategy name (e.g., "arb_detector", "price_alert", "depth_scanner")
+        market_id: Unique identifier for the market
+        timestamp: Timestamp when the signal was generated (datetime or ISO format string)
+        signal: Dictionary containing signal details (will be serialized to JSON)
+        simulated_outcome: Outcome of the simulation (e.g., "would_trigger", "early", "late", "wrong")
+        notes: Additional notes about the result
+        db_path: Path to the SQLite database file
+
+    Example:
+        >>> append_backtest_result(
+        ...     strategy="arb_detector",
+        ...     market_id="market_123",
+        ...     timestamp=datetime.now(),
+        ...     signal={"profit": 0.05, "type": "two-way"},
+        ...     simulated_outcome="would_trigger",
+        ...     notes="Arbitrage opportunity detected"
+        ... )
+    """
+    try:
+        db = _get_db(db_path)
+        _ensure_backtest_table(db)
+
+        # Convert timestamp to ISO format string if it's a datetime
+        if isinstance(timestamp, datetime):
+            timestamp_str = timestamp.isoformat()
+        else:
+            timestamp_str = timestamp
+
+        # Serialize signal to JSON string
+        signal_json = json.dumps(signal) if signal else None
+
+        result_data = {
+            "strategy": strategy,
+            "market_id": market_id,
+            "timestamp": timestamp_str,
+            "signal": signal_json,
+            "simulated_outcome": simulated_outcome,
+            "notes": notes,
+        }
+
+        db["backtest_results"].insert(result_data)
+        logger.debug(
+            f"Appended backtest result for {strategy} on market {market_id} at {timestamp_str}"
+        )
+
+    except Exception as e:
+        logger.error(f"Error appending backtest result: {e}", exc_info=True)
+        # Don't re-raise to allow continued processing
+
+
+def get_backtest_results(
+    strategy: Optional[str] = None,
+    market_id: Optional[str] = None,
+    start: Optional[Union[datetime, str]] = None,
+    end: Optional[Union[datetime, str]] = None,
+    limit: int = 1000,
+    db_path: str = _HISTORY_DB_PATH,
+) -> List[Dict[str, Any]]:
+    """
+    Retrieve backtest results within specified filters.
+
+    Args:
+        strategy: Optional strategy name to filter by
+        market_id: Optional market ID to filter by
+        start: Start of time range (inclusive). If None, no lower bound.
+        end: End of time range (inclusive). If None, no upper bound.
+        limit: Maximum number of results to return (default: 1000)
+        db_path: Path to the SQLite database file
+
+    Returns:
+        List of backtest result dictionaries ordered by timestamp ascending.
+        Each dict contains: strategy, market_id, timestamp, signal (deserialized),
+        simulated_outcome, notes.
+
+    Example:
+        >>> results = get_backtest_results(
+        ...     strategy="arb_detector",
+        ...     market_id="market_123",
+        ...     limit=100
+        ... )
+    """
+    try:
+        db = _get_db(db_path)
+
+        # Check if table exists
+        if "backtest_results" not in db.table_names():
+            return []
+
+        # Convert datetime to ISO format strings
+        if isinstance(start, datetime):
+            start_str = start.isoformat()
+        else:
+            start_str = start
+
+        if isinstance(end, datetime):
+            end_str = end.isoformat()
+        else:
+            end_str = end
+
+        # Build query with parameterized values
+        query = "SELECT * FROM backtest_results WHERE 1=1"
+        params: List[Any] = []
+
+        if strategy is not None:
+            query += " AND strategy = ?"
+            params.append(strategy)
+
+        if market_id is not None:
+            query += " AND market_id = ?"
+            params.append(market_id)
+
+        if start_str is not None:
+            query += " AND timestamp >= ?"
+            params.append(start_str)
+
+        if end_str is not None:
+            query += " AND timestamp <= ?"
+            params.append(end_str)
+
+        query += " ORDER BY timestamp ASC LIMIT ?"
+        params.append(limit)
+
+        # Execute query
+        cursor = db.execute(query, params)
+
+        # Get column names
+        column_names = [description[0] for description in cursor.description]
+
+        # Convert to list of dicts and deserialize JSON
+        results = []
+        for row in cursor.fetchall():
+            # Create dict from row using column names
+            result_dict = dict(zip(column_names, row))
+            # Deserialize signal JSON
+            if result_dict.get("signal"):
+                try:
+                    result_dict["signal"] = json.loads(result_dict["signal"])
+                except json.JSONDecodeError:
+                    result_dict["signal"] = None
+            results.append(result_dict)
+
+        logger.debug(f"Retrieved {len(results)} backtest results")
+        return results
+
+    except Exception as e:
+        logger.error(f"Error retrieving backtest results: {e}", exc_info=True)
+        return []

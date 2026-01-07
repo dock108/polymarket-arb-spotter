@@ -19,8 +19,20 @@ from datetime import datetime
 from enum import Enum
 from typing import Any, Callable, Dict, List, Optional, Union
 
-from app.core.history_store import get_ticks, get_market_ids
+from app.core.history_store import (
+    get_ticks,
+    get_market_ids,
+    append_backtest_result,
+)
 from app.core.logger import logger
+
+# Import depth scanner at module level for better performance
+try:
+    from app.core.depth_scanner import analyze_depth, detect_depth_signals
+except ImportError:
+    # Gracefully handle if depth_scanner is not available
+    analyze_depth = None
+    detect_depth_signals = None
 
 
 class PlaybackSpeed(Enum):
@@ -413,3 +425,395 @@ def create_replay_engine(
         >>> engine.replay_market("market_123", on_tick=my_handler)
     """
     return HistoricalReplayEngine(db_path=db_path, speed=speed)
+
+
+class BacktestEngine:
+    """
+    Backtest engine for simulating alerts on historical data.
+
+    This class pipes replay events through various detection strategies
+    (arbitrage detector, price alerts, depth scanner) and records
+    simulated outcomes to evaluate tool performance on historical data.
+
+    Attributes:
+        replay_engine: HistoricalReplayEngine for loading historical data
+        db_path: Path to database for storing backtest results
+        arb_detector: Optional ArbitrageDetector instance
+        price_alerts: Optional list of PriceAlert configurations
+        depth_config: Optional depth scanner configuration
+    """
+
+    def __init__(
+        self,
+        db_path: str = "data/market_history.db",
+        speed: Union[PlaybackSpeed, float] = PlaybackSpeed.JUMP_TO_EVENTS,
+    ):
+        """
+        Initialize the backtest engine.
+
+        Args:
+            db_path: Path to the history database file
+            speed: Playback speed for replay (default: JUMP_TO_EVENTS for fast backtesting)
+        """
+        self.replay_engine = HistoricalReplayEngine(db_path=db_path, speed=speed)
+        self.db_path = db_path
+        self.arb_detector = None
+        self.price_alerts = []
+        self.depth_config = None
+
+        # Statistics
+        self.stats = {
+            "ticks_processed": 0,
+            "arb_signals": 0,
+            "price_alerts_triggered": 0,
+            "depth_signals": 0,
+            "markets_analyzed": set(),
+        }
+
+        logger.info("BacktestEngine initialized")
+
+    def set_arb_detector(self, detector) -> None:
+        """
+        Set the arbitrage detector for backtesting.
+
+        Args:
+            detector: ArbitrageDetector instance
+        """
+        self.arb_detector = detector
+        logger.info("Arbitrage detector configured for backtest")
+
+    def add_price_alert(
+        self, market_id: str, direction: str, target_price: float
+    ) -> None:
+        """
+        Add a price alert to backtest.
+
+        Args:
+            market_id: Market ID to monitor
+            direction: Alert direction ("above" or "below")
+            target_price: Price threshold
+        """
+        self.price_alerts.append(
+            {
+                "market_id": market_id,
+                "direction": direction,
+                "target_price": target_price,
+                "triggered": False,
+            }
+        )
+        logger.info(f"Added price alert: {market_id} {direction} {target_price}")
+
+    def set_depth_config(self, config: Dict[str, Any]) -> None:
+        """
+        Set depth scanner configuration for backtesting.
+
+        Args:
+            config: Depth configuration dictionary
+        """
+        self.depth_config = config
+        logger.info("Depth scanner configured for backtest")
+
+    def _process_tick_arb_detector(self, tick: Dict[str, Any]) -> None:
+        """
+        Process tick through arbitrage detector and record results.
+
+        Args:
+            tick: Tick data dictionary
+        """
+        if not self.arb_detector:
+            return
+
+        try:
+            # Convert tick to market snapshot format
+            snapshot = {
+                "id": tick["market_id"],
+                "outcomes": [
+                    {
+                        "name": "Yes",
+                        "price": tick["yes_price"],
+                        "volume": tick.get("volume", 0) / 2,
+                    },
+                    {
+                        "name": "No",
+                        "price": tick["no_price"],
+                        "volume": tick.get("volume", 0) / 2,
+                    },
+                ],
+            }
+
+            # Detect opportunities
+            opportunities = self.arb_detector.detect_opportunities([snapshot])
+
+            if opportunities:
+                for opp in opportunities:
+                    self.stats["arb_signals"] += 1
+
+                    # Record backtest result
+                    signal_data = {
+                        "opportunity_type": opp.opportunity_type,
+                        "expected_profit": opp.expected_profit,
+                        "expected_return_pct": opp.expected_return_pct,
+                        "yes_price": tick["yes_price"],
+                        "no_price": tick["no_price"],
+                        "price_sum": tick["yes_price"] + tick["no_price"],
+                    }
+
+                    append_backtest_result(
+                        strategy="arb_detector",
+                        market_id=tick["market_id"],
+                        timestamp=tick["timestamp"],
+                        signal=signal_data,
+                        simulated_outcome="would_trigger",
+                        notes=f"Arbitrage opportunity: {opp.expected_return_pct:.2f}% return",
+                        db_path=self.db_path,
+                    )
+
+        except Exception as e:
+            logger.error(f"Error processing tick for arb detector: {e}", exc_info=True)
+
+    def _process_tick_price_alerts(self, tick: Dict[str, Any]) -> None:
+        """
+        Process tick through price alerts and record results.
+
+        Args:
+            tick: Tick data dictionary
+        """
+        if not self.price_alerts:
+            return
+
+        try:
+            # Check each configured price alert
+            for alert_config in self.price_alerts:
+                # Only check alerts for this market
+                if alert_config["market_id"] != tick["market_id"]:
+                    continue
+
+                # Use yes_price as current price
+                current_price = tick["yes_price"]
+                target_price = alert_config["target_price"]
+                direction = alert_config["direction"]
+
+                # Check if alert would trigger
+                triggered = False
+                if direction == "above" and current_price > target_price:
+                    triggered = True
+                elif direction == "below" and current_price < target_price:
+                    triggered = True
+
+                if triggered and not alert_config["triggered"]:
+                    # Mark as triggered to avoid duplicate signals
+                    alert_config["triggered"] = True
+                    self.stats["price_alerts_triggered"] += 1
+
+                    # Record backtest result
+                    signal_data = {
+                        "direction": direction,
+                        "target_price": target_price,
+                        "current_price": current_price,
+                        "alert_type": "price_alert",
+                    }
+
+                    outcome = "would_trigger"
+                    notes = f"Price alert triggered: {current_price:.4f} {direction} {target_price:.4f}"
+
+                    append_backtest_result(
+                        strategy="price_alert",
+                        market_id=tick["market_id"],
+                        timestamp=tick["timestamp"],
+                        signal=signal_data,
+                        simulated_outcome=outcome,
+                        notes=notes,
+                        db_path=self.db_path,
+                    )
+
+        except Exception as e:
+            logger.error(f"Error processing tick for price alerts: {e}", exc_info=True)
+
+    def _process_tick_depth_scanner(self, tick: Dict[str, Any]) -> None:
+        """
+        Process tick through depth scanner and record results.
+
+        Args:
+            tick: Tick data dictionary
+        """
+        if not self.depth_config:
+            return
+
+        # Check if depth scanner functions are available
+        if analyze_depth is None or detect_depth_signals is None:
+            logger.warning("Depth scanner functions not available, skipping depth analysis")
+            return
+
+        try:
+            # Check if tick has depth summary
+            depth_summary = tick.get("depth_summary")
+            if not depth_summary:
+                return
+
+            # Analyze depth if we have orderbook data
+            if "bids" in depth_summary and "asks" in depth_summary:
+                metrics = analyze_depth(depth_summary)
+                signals = detect_depth_signals(metrics, self.depth_config)
+
+                for signal in signals:
+                    if signal.triggered:
+                        self.stats["depth_signals"] += 1
+
+                        # Record backtest result
+                        signal_data = {
+                            "signal_type": signal.signal_type,
+                            "metrics": signal.metrics,
+                            "reason": signal.reason,
+                        }
+
+                        append_backtest_result(
+                            strategy="depth_scanner",
+                            market_id=tick["market_id"],
+                            timestamp=tick["timestamp"],
+                            signal=signal_data,
+                            simulated_outcome="would_trigger",
+                            notes=signal.reason,
+                            db_path=self.db_path,
+                        )
+
+        except Exception as e:
+            logger.error(
+                f"Error processing tick for depth scanner: {e}", exc_info=True
+            )
+
+    def _process_tick(self, tick: Dict[str, Any]) -> None:
+        """
+        Process a single tick through all configured strategies.
+
+        Args:
+            tick: Tick data dictionary
+        """
+        self.stats["ticks_processed"] += 1
+        self.stats["markets_analyzed"].add(tick["market_id"])
+
+        # Process through each strategy
+        self._process_tick_arb_detector(tick)
+        self._process_tick_price_alerts(tick)
+        self._process_tick_depth_scanner(tick)
+
+    def run_backtest(
+        self,
+        market_ids: Optional[List[str]] = None,
+        start: Optional[Union[datetime, str]] = None,
+        end: Optional[Union[datetime, str]] = None,
+        limit_per_market: int = 10000,
+    ) -> Dict[str, Any]:
+        """
+        Run backtest on historical data.
+
+        This method replays historical ticks through all configured strategies
+        and records simulated outcomes to the backtest_results table.
+
+        Args:
+            market_ids: List of market IDs to backtest. If None, tests all available markets.
+            start: Start timestamp for backtest
+            end: End timestamp for backtest
+            limit_per_market: Maximum ticks per market
+
+        Returns:
+            Dictionary containing backtest statistics
+
+        Example:
+            >>> engine = BacktestEngine()
+            >>> engine.set_arb_detector(ArbitrageDetector())
+            >>> engine.add_price_alert("market_123", "above", 0.70)
+            >>> results = engine.run_backtest(market_ids=["market_123"])
+            >>> print(f"Processed {results['ticks_processed']} ticks")
+        """
+        logger.info("Starting backtest...")
+
+        # Reset statistics
+        self.stats = {
+            "ticks_processed": 0,
+            "arb_signals": 0,
+            "price_alerts_triggered": 0,
+            "depth_signals": 0,
+            "markets_analyzed": set(),
+        }
+
+        # Reset price alert triggered states for fresh backtest
+        for alert in self.price_alerts:
+            alert["triggered"] = False
+
+        try:
+            if market_ids:
+                # Replay specific markets
+                for market_id in market_ids:
+                    self.replay_engine.replay_market(
+                        market_id=market_id,
+                        start=start,
+                        end=end,
+                        on_tick=self._process_tick,
+                        limit=limit_per_market,
+                    )
+            else:
+                # Replay all markets
+                self.replay_engine.replay_all_markets(
+                    start=start,
+                    end=end,
+                    on_tick=self._process_tick,
+                    limit_per_market=limit_per_market,
+                )
+
+            # Convert set to count for return value
+            markets_count = len(self.stats["markets_analyzed"])
+            return_stats = dict(self.stats)
+            return_stats["markets_analyzed"] = markets_count
+
+            logger.info(
+                f"Backtest complete: {self.stats['ticks_processed']} ticks, "
+                f"{self.stats['arb_signals']} arb signals, "
+                f"{self.stats['price_alerts_triggered']} price alerts, "
+                f"{self.stats['depth_signals']} depth signals"
+            )
+
+            return return_stats
+
+        except Exception as e:
+            logger.error(f"Error during backtest: {e}", exc_info=True)
+            markets_count = len(self.stats["markets_analyzed"])
+            return_stats = dict(self.stats)
+            return_stats["markets_analyzed"] = markets_count
+            return return_stats
+
+    def get_summary(self) -> Dict[str, Any]:
+        """
+        Get backtest summary statistics.
+
+        Returns:
+            Dictionary with backtest statistics
+        """
+        return {
+            "ticks_processed": self.stats["ticks_processed"],
+            "arb_signals": self.stats["arb_signals"],
+            "price_alerts_triggered": self.stats["price_alerts_triggered"],
+            "depth_signals": self.stats["depth_signals"],
+            "markets_analyzed": len(self.stats["markets_analyzed"]),
+        }
+
+
+def create_backtest_engine(
+    db_path: str = "data/market_history.db",
+    speed: Union[PlaybackSpeed, float] = PlaybackSpeed.JUMP_TO_EVENTS,
+) -> BacktestEngine:
+    """
+    Convenience function to create a backtest engine.
+
+    Args:
+        db_path: Path to the history database file
+        speed: Playback speed (default: JUMP_TO_EVENTS for fast backtesting)
+
+    Returns:
+        Configured BacktestEngine instance
+
+    Example:
+        >>> engine = create_backtest_engine()
+        >>> engine.set_arb_detector(ArbitrageDetector())
+        >>> results = engine.run_backtest()
+    """
+    return BacktestEngine(db_path=db_path, speed=speed)

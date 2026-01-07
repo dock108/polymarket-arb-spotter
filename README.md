@@ -6,6 +6,7 @@ A Python tool for detecting arbitrage opportunities in Polymarket prediction mar
 
 - **Real-time Detection**: Monitor Polymarket markets for arbitrage opportunities
 - **Historical Replay Engine**: Test algorithms against past markets with configurable playback speeds
+- **Backtest Alerts**: Dry-run simulation to evaluate detection tool performance on historical data
 - **Price Alert Watcher**: Subscribe to markets and get alerted when prices cross thresholds
 - **WebSocket Streaming**: Real-time price updates via WebSocket connections
 - **Mock Data Simulation**: Test detection algorithms with generated data
@@ -89,9 +90,15 @@ python scripts/example_replay.py --speed 10
 
 # Backtest with arbitrage detection
 python scripts/example_replay_with_arb_detector.py
+
+# Run backtest simulation on all strategies
+python scripts/example_backtest.py
+
+# Backtest specific market
+python scripts/example_backtest.py --market market_123
 ```
 
-See [docs/replay_engine.md](docs/replay_engine.md) for detailed documentation.
+See [docs/replay_engine.md](docs/replay_engine.md) and [docs/backtest_alerts.md](docs/backtest_alerts.md) for detailed documentation.
 
 ## 🧪 Testing
 
@@ -119,6 +126,7 @@ See `.env.example` for all available options.
 | Document | Description |
 |----------|-------------|
 | [Replay Engine](docs/replay_engine.md) | Historical data replay and backtesting |
+| [Backtest Alerts](docs/backtest_alerts.md) | Dry-run simulation for tool evaluation |
 | [Notification Setup](docs/notifications.md) | Configure Telegram/email alerts |
 | [Deployment Guide](docs/deployment.md) | Deploy on Raspberry Pi or servers |
 | [Scripts Documentation](docs/scripts.md) | Example scripts and utilities |
