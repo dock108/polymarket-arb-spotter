@@ -120,7 +120,7 @@ class ArbitrageDetector:
             conn.close()
 
     def detect_opportunities(
-        self, market_data: List[Dict[str, Any]]
+        self, market_data: List[Any]
     ) -> List[ArbitrageOpportunity]:
         """
         Detect arbitrage opportunities from market data.
@@ -129,7 +129,7 @@ class ArbitrageDetector:
         outcomes is less than 1.0 (two-way arbitrage for binary markets).
 
         Args:
-            market_data: List of market data dictionaries
+            market_data: List of market data dictionaries or NormalizedMarket objects
 
         Returns:
             List of detected arbitrage opportunities
@@ -147,11 +147,17 @@ class ArbitrageDetector:
                         logger.warning("Skipping None market data")
                         continue
 
-                    opp = self._check_two_way_arbitrage(market)
+                    # Handle NormalizedMarket objects
+                    if hasattr(market, "to_dict"):
+                        market_dict = market.to_dict()
+                    else:
+                        market_dict = market
+
+                    opp = self._check_two_way_arbitrage(market_dict)
                     if opp:
                         opportunities.append(opp)
                 except Exception as e:
-                    market_id = market.get("id", "unknown") if market else "unknown"
+                    market_id = market.id if hasattr(market, "id") else market.get("id", "unknown")
                     logger.error(
                         f"Error checking arbitrage for market {market_id}: {e}"
                     )

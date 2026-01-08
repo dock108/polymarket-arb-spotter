@@ -15,6 +15,7 @@ from app.core.arb_detector import ArbitrageDetector
 from app.core.history_recorder import record_market_tick
 from app.core.logger import fetch_recent, logger
 from app.core.config import config
+from app.core.data_source import get_data_source
 from app.core.mock_data import MockDataGenerator
 from app.ui.depth_view import render_depth_view
 from app.ui.history_view import render_history_view
@@ -62,14 +63,27 @@ def render_dashboard():
     # Mode toggle in sidebar
     st.sidebar.markdown("---")
     st.sidebar.subheader("Mode")
+    
+    # Initialize mode from config if not in session state
+    if "mode" not in st.session_state:
+        st.session_state.mode = "Mock Mode" if config.mode == "mock" else "Live Read-Only"
+    
+    mode_options = ["Mock Mode", "Live Read-Only"]
+    selected_mode_index = mode_options.index(st.session_state.mode)
+    
     mode = st.sidebar.radio(
         "Select Mode",
-        ["Mock Mode", "Live Read-Only"],
+        mode_options,
+        index=selected_mode_index,
         help="Mock Mode uses simulated data. Live Read-Only reads from API without trading.",
     )
 
-    # Store mode in session state
-    st.session_state.mode = mode
+    # Update session state and config if changed
+    if mode != st.session_state.mode:
+        st.session_state.mode = mode
+        # Also update config for other parts of the app
+        config.mode = "live" if mode == "Live Read-Only" else "mock"
+        st.rerun()
 
     # Render appropriate page
     if page == "Dashboard":
@@ -96,9 +110,24 @@ def render_dashboard_content():
     """
     st.title("🎯 Polymarket Arbitrage Spotter")
 
-    # Display current mode
+    # Display current mode and status
     mode_emoji = "🔧" if st.session_state.mode == "Mock Mode" else "📡"
-    st.info(f"{mode_emoji} Running in: **{st.session_state.mode}**")
+    
+    status_col1, status_col2 = st.columns([3, 1])
+    with status_col1:
+        st.info(f"{mode_emoji} Running in: **{st.session_state.mode}**")
+    
+    with status_col2:
+        if st.session_state.mode == "Live Read-Only":
+            # Check API health
+            from app.core.api_client import PolymarketAPIClient
+            client = PolymarketAPIClient()
+            if client.health_check():
+                st.success("🟢 API Connected")
+            else:
+                st.error("🔴 API Offline")
+        else:
+            st.success("🟢 Local Mock Active")
 
     st.markdown("---")
 
@@ -223,21 +252,34 @@ def render_dashboard_content():
 
     st.markdown("---")
 
-    # Control buttons - Mock mode only
+    # Control buttons
     if st.session_state.mode == "Mock Mode":
         st.subheader("🎮 Mock Controls")
-
         col1, col2, col3 = st.columns([1, 1, 2])
-
         with col1:
             if st.button("🔄 Generate Data", type="primary"):
-                generate_mock_data()
-                st.success("Mock data generated! Refresh to see results.")
+                run_data_cycle()
+                st.success("Mock data generated!")
                 st.rerun()
     else:
-        st.info(
-            "📡 Live Read-Only Mode - Monitoring Polymarket API (not yet implemented)"
-        )
+        st.subheader("📡 Live Controls")
+        col1, col2, col3 = st.columns([1, 1, 2])
+        with col1:
+            if st.button("📡 Scan Live Markets", type="primary"):
+                with st.spinner("Fetching live data from Polymarket..."):
+                    run_data_cycle()
+                st.success("Live scan complete!")
+                st.rerun()
+        
+        with col2:
+            auto_refresh = st.checkbox("Auto-refresh (30s)", value=False)
+            if auto_refresh:
+                st.info("Auto-refresh is active")
+                # We'll use streamlit's native sleep/rerun for simple auto-refresh
+                import time
+                time.sleep(30)
+                run_data_cycle()
+                st.rerun()
 
     st.markdown("---")
 
@@ -264,32 +306,28 @@ def render_dashboard_content():
     st.caption(f"Last updated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
 
 
-def generate_mock_data():
-    """Generate mock data for testing."""
+def run_data_cycle():
+    """Run a single cycle of data fetching and arbitrage detection."""
     from app.core.logger import log_event, init_db
-
+    
     # Initialize database
     init_db()
-
-    # Generate mock data
-    generator = MockDataGenerator(arb_frequency=0.3)
-    markets = generator.generate_snapshots(count=20)
-
-    # Record market data to history (non-blocking)
+    
+    # Get the appropriate data source
+    mode_key = "live" if st.session_state.mode == "Live Read-Only" else "mock"
+    source = get_data_source(mode_key)
+    
+    # Fetch markets
+    markets = source.get_markets(limit=20)
+    
+    # Record market data to history
     for market in markets:
-        if market is None:
-            continue
-        outcomes = market.get("outcomes", [])
-        if len(outcomes) >= 2:
-            yes_price = outcomes[0].get("price", 0)
-            no_price = outcomes[1].get("price", 0)
-            volume = market.get("volume", 0)
-            record_market_tick(
-                market_id=market.get("id", "unknown"),
-                yes_price=yes_price,
-                no_price=no_price,
-                volume=volume,
-            )
+        record_market_tick(
+            market_id=market.id,
+            yes_price=market.yes_price,
+            no_price=market.no_price,
+            volume=market.volume_24h,
+        )
 
     # Initialize detector
     detector = ArbitrageDetector()
@@ -311,17 +349,24 @@ def generate_mock_data():
                 "no_price": opp.positions[1]["price"] if len(opp.positions) > 1 else 0,
                 "sum": sum(p["price"] for p in opp.positions),
                 "expected_profit_pct": opp.expected_return_pct,
-                "mode": "mock",
+                "mode": mode_key,
                 "decision": "alerted",
-                "mock_result": "success",
+                "mock_result": "success" if mode_key == "mock" else None,
                 "failure_reason": None,
                 "latency_ms": 0,
             }
         )
 
     logger.info(
-        f"Generated {len(opportunities)} opportunities from {len(markets)} markets"
+        f"Completed {mode_key} data cycle: {len(opportunities)} opportunities from {len(markets)} markets"
     )
+
+
+def generate_mock_data():
+    """
+    Deprecated: Use run_data_cycle instead.
+    """
+    run_data_cycle()
 
 
 if __name__ == "__main__":

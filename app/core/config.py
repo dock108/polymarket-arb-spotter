@@ -69,6 +69,9 @@ class Config:
     wallet_features_enabled: bool = False  # Enable wallet intelligence views
     do_not_expose_full_addresses: bool = True  # Mask wallet addresses in UI/alerts
 
+    # Operational Mode
+    mode: Literal["mock", "live"] = "mock"
+
     @classmethod
     def from_env(cls) -> "Config":
         """
@@ -175,8 +178,15 @@ class Config:
             "DO_NOT_EXPOSE_FULL_ADDRESSES", "true"
         ).lower() in ("true", "1", "yes")
 
+        # Load operational mode
+        mode = os.getenv("MODE", "mock").lower()
+        if mode not in ["mock", "live"]:
+            _logger.warning(f"Invalid MODE '{mode}'. Defaulting to 'mock'.")
+            mode = "mock"
+
         # Create config instance
         config = cls(
+            mode=mode,
             api_endpoint=api_endpoint,
             api_key=api_key,
             db_path=db_path,
