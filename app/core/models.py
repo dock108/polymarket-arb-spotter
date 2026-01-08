@@ -17,6 +17,8 @@ class NormalizedMarket:
     slug: str
     active: bool
     closed: bool
+    expires_at: Optional[datetime] = None  # Section 6.1
+    category: Optional[str] = None         # Section 6.1
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for backward compatibility."""
@@ -30,6 +32,8 @@ class NormalizedMarket:
             "volume_24h": self.volume_24h,
             "liquidity": self.liquidity,
             "last_updated": self.last_updated.isoformat(),
+            "expires_at": self.expires_at.isoformat() if self.expires_at else None,
+            "category": self.category,
             "outcomes": [
                 {"name": "Yes", "price": self.yes_price},
                 {"name": "No", "price": self.no_price}

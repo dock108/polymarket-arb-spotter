@@ -9,10 +9,12 @@ and includes risk assessment for detected opportunities.
 from dataclasses import dataclass
 from datetime import datetime
 from typing import List, Optional, Dict, Any
+import json
 import sqlite3
 from pathlib import Path
 
 from app.core.logger import logger
+from app.core.signals.context_builder import build_signal_metadata
 
 
 @dataclass
@@ -50,11 +52,15 @@ class ArbitrageOpportunity:
     expected_return_pct: float
     positions: List[Dict[str, Any]]  # List of positions to take
     detected_at: datetime
-    expires_at: Optional[datetime] = None
     risk_score: float = 0.0
+    metadata: Optional[Dict[str, Any]] = None
+    outcome: Optional[Dict[str, Any]] = None
+    expires_at: Optional[datetime] = None
+    category: Optional[str] = None
+    mode: Optional[str] = None
 
     def to_dict(self) -> Dict[str, Any]:
-        """Convert opportunity to dictionary."""
+        """Convert opportunity to dictionary for logging and serialization."""
         return {
             "market_id": self.market_id,
             "market_name": self.market_name,
@@ -65,6 +71,10 @@ class ArbitrageOpportunity:
             "detected_at": self.detected_at.isoformat(),
             "expires_at": self.expires_at.isoformat() if self.expires_at else None,
             "risk_score": self.risk_score,
+            "metadata": self.metadata,
+            "outcome": self.outcome,
+            "category": self.category,
+            "mode": self.mode
         }
 
 
@@ -110,10 +120,72 @@ class ArbitrageDetector:
                 expected_profit REAL,
                 expected_return_pct REAL,
                 detected_at TIMESTAMP,
-                risk_score REAL
+                risk_score REAL,
+                metadata TEXT,
+                outcome TEXT,
+                expires_at TIMESTAMP,
+                category TEXT,
+                mode TEXT
             )
         """
         )
+
+        # In-app alerts table
+        cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS in_app_alerts (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                market_id TEXT NOT NULL,
+                market_name TEXT,
+                roi REAL,
+                reason TEXT,
+                timestamp TIMESTAMP,
+                seen BOOLEAN DEFAULT 0,
+                unique_key TEXT UNIQUE,
+                expires_at TIMESTAMP,
+                category TEXT,
+                mode TEXT
+            )
+        """
+        )
+
+        # Outbound queue table
+        cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS outbound_queue (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                alert_id INTEGER,
+                created_at TIMESTAMP,
+                type TEXT,
+                payload_summary TEXT,
+                status TEXT DEFAULT 'pending_external',
+                FOREIGN KEY(alert_id) REFERENCES in_app_alerts(id)
+            )
+        """
+        )
+
+        # Check if new columns exist for existing databases
+        cursor.execute("PRAGMA table_info(opportunities)")
+        columns = [info[1] for info in cursor.fetchall()]
+        if "metadata" not in columns:
+            cursor.execute("ALTER TABLE opportunities ADD COLUMN metadata TEXT")
+        if "outcome" not in columns:
+            cursor.execute("ALTER TABLE opportunities ADD COLUMN outcome TEXT")
+        if "expires_at" not in columns:
+            cursor.execute("ALTER TABLE opportunities ADD COLUMN expires_at TIMESTAMP")
+        if "category" not in columns:
+            cursor.execute("ALTER TABLE opportunities ADD COLUMN category TEXT")
+        if "mode" not in columns:
+            cursor.execute("ALTER TABLE opportunities ADD COLUMN mode TEXT")
+
+        cursor.execute("PRAGMA table_info(in_app_alerts)")
+        alert_columns = [info[1] for info in cursor.fetchall()]
+        if "expires_at" not in alert_columns:
+            cursor.execute("ALTER TABLE in_app_alerts ADD COLUMN expires_at TIMESTAMP")
+        if "category" not in alert_columns:
+            cursor.execute("ALTER TABLE in_app_alerts ADD COLUMN category TEXT")
+        if "mode" not in alert_columns:
+            cursor.execute("ALTER TABLE in_app_alerts ADD COLUMN mode TEXT")
 
         conn.commit()
         if self.db_path != ":memory:":
@@ -213,18 +285,20 @@ class ArbitrageDetector:
 
             return ArbitrageOpportunity(
                 market_id=market.get("id", "unknown"),
-                market_name=market.get("name", "Unknown Market"),
+                market_name=market.get("title", market.get("name", "Unknown Market")),
                 opportunity_type="two-way",
                 expected_profit=expected_profit,
                 expected_return_pct=expected_return_pct,
                 positions=positions,
                 detected_at=datetime.now(),
                 expires_at=(
-                    datetime.fromisoformat(market["expires_at"])
+                    datetime.fromisoformat(market["expires_at"].replace("Z", "+00:00"))
                     if market.get("expires_at")
                     else None
                 ),
                 risk_score=self._calculate_risk_score(market, profit_margin),
+                metadata=build_signal_metadata(market, "two-way"),
+                category=market.get("category", "General")
             )
 
         return None
@@ -341,6 +415,58 @@ class ArbitrageDetector:
                 },
             )
 
+    def get_opportunities_for_market(
+        self, market_id: str, start: datetime, end: datetime, mode: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
+        """
+        Get opportunities for a specific market within a time range.
+        """
+        try:
+            if self._conn:
+                conn = self._conn
+            else:
+                conn = sqlite3.connect(self.db_path)
+
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+
+            query = """
+                SELECT * FROM opportunities
+                WHERE market_id = ? AND detected_at BETWEEN ? AND ?
+            """
+            params = [market_id, start.isoformat(), end.isoformat()]
+            
+            if mode:
+                query += " AND mode = ?"
+                params.append(mode)
+                
+            query += " ORDER BY detected_at ASC"
+
+            cursor.execute(query, tuple(params))
+
+            rows = cursor.fetchall()
+            if not self._conn:
+                conn.close()
+
+            results = []
+            for row in rows:
+                d = dict(row)
+                if d.get("metadata"):
+                    try:
+                        d["metadata"] = json.loads(d["metadata"])
+                    except:
+                        pass
+                if d.get("outcome"):
+                    try:
+                        d["outcome"] = json.loads(d["outcome"])
+                    except:
+                        pass
+                results.append(d)
+            return results
+        except Exception as e:
+            logger.error(f"Error fetching opportunities for market: {e}", exc_info=True)
+            return []
+
     def _calculate_risk_score(
         self, market: Dict[str, Any], profit_margin: float
     ) -> float:
@@ -396,8 +522,9 @@ class ArbitrageDetector:
                 """
                 INSERT INTO opportunities
                 (market_id, market_name, opportunity_type, expected_profit,
-                 expected_return_pct, detected_at, risk_score)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                 expected_return_pct, detected_at, risk_score, metadata, outcome,
+                 expires_at, category, mode)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
                 (
                     opportunity.market_id,
@@ -407,6 +534,11 @@ class ArbitrageDetector:
                     opportunity.expected_return_pct,
                     opportunity.detected_at.isoformat(),
                     opportunity.risk_score,
+                    json.dumps(opportunity.metadata) if opportunity.metadata else None,
+                    json.dumps(opportunity.outcome) if opportunity.outcome else None,
+                    opportunity.expires_at.isoformat() if opportunity.expires_at else None,
+                    opportunity.category,
+                    opportunity.mode,
                 ),
             )
 
@@ -422,12 +554,13 @@ class ArbitrageDetector:
             )
             # Don't re-raise to allow continued processing
 
-    def get_recent_opportunities(self, limit: int = 100) -> List[Dict[str, Any]]:
+    def get_recent_opportunities(self, limit: int = 100, mode: Optional[str] = None) -> List[Dict[str, Any]]:
         """
         Get recent opportunities from database.
 
         Args:
             limit: Maximum number of opportunities to return
+            mode: Optional mode filter ("live" or "mock")
 
         Returns:
             List of opportunity dictionaries
@@ -442,20 +575,37 @@ class ArbitrageDetector:
             conn.row_factory = sqlite3.Row
             cursor = conn.cursor()
 
-            cursor.execute(
-                """
-                SELECT * FROM opportunities
-                ORDER BY detected_at DESC
-                LIMIT ?
-            """,
-                (limit,),
-            )
+            query = "SELECT * FROM opportunities"
+            params = []
+            
+            if mode:
+                query += " WHERE mode = ?"
+                params.append(mode)
+                
+            query += " ORDER BY detected_at DESC LIMIT ?"
+            params.append(limit)
+
+            cursor.execute(query, params)
 
             rows = cursor.fetchall()
             if not self._conn:
                 conn.close()
 
-            return [dict(row) for row in rows]
+            results = []
+            for row in rows:
+                d = dict(row)
+                if d.get("metadata"):
+                    try:
+                        d["metadata"] = json.loads(d["metadata"])
+                    except:
+                        pass
+                if d.get("outcome"):
+                    try:
+                        d["outcome"] = json.loads(d["outcome"])
+                    except:
+                        pass
+                results.append(d)
+            return results
 
         except Exception as e:
             logger.error(f"Error fetching recent opportunities: {e}", exc_info=True)

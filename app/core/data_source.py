@@ -47,6 +47,13 @@ class MockDataSource(DataSource):
             elif o["name"].lower() == "no":
                 no_price = o["price"]
         
+        expires_at = None
+        if m.get("expires_at"):
+            try:
+                expires_at = datetime.fromisoformat(m["expires_at"].replace("Z", "+00:00"))
+            except:
+                pass
+
         return NormalizedMarket(
             id=m["id"],
             title=m.get("name", ""),
@@ -59,7 +66,9 @@ class MockDataSource(DataSource):
             question=m.get("question", ""),
             slug=m.get("id", ""),
             active=True,
-            closed=False
+            closed=False,
+            expires_at=expires_at,
+            category=m.get("category", "General")
         )
 
 class PolymarketLiveDataSource(DataSource):
@@ -105,9 +114,16 @@ class PolymarketLiveDataSource(DataSource):
                 yes_price = float(outcome_prices[0])
                 no_price = float(outcome_prices[1])
             
+            expires_at = None
+            if m.get("endDate"):
+                try:
+                    expires_at = datetime.fromisoformat(m["endDate"].replace("Z", "+00:00"))
+                except:
+                    pass
+
             return NormalizedMarket(
                 id=m["id"],
-                title=m.get("question", ""),
+                title=m.get("question", m.get("title", "")),
                 yes_price=yes_price,
                 no_price=no_price,
                 volume_24h=float(m.get("volume24hr", 0.0)),
@@ -117,7 +133,9 @@ class PolymarketLiveDataSource(DataSource):
                 question=m.get("question", ""),
                 slug=m.get("slug", ""),
                 active=m.get("active", True),
-                closed=m.get("closed", False)
+                closed=m.get("closed", False),
+                expires_at=expires_at,
+                category=m.get("category", m.get("groupTab", "General"))
             )
         except Exception as e:
             logger.error(f"Failed to normalize live market data: {e}")
@@ -128,7 +146,7 @@ def get_data_source(mode: Optional[str] = None) -> DataSource:
     Get the appropriate data source based on mode.
     
     Args:
-        mode: "mock" or "live". If None, uses config.mode.
+        mode: "live" or "mock". If None, uses config.mode.
         
     Returns:
         DataSource instance

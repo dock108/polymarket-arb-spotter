@@ -15,21 +15,92 @@ from app.core.config import config
 
 def render_settings_view():
     """
-    Render the settings page (read-only display of current config).
-
-    Settings cannot be modified through the UI - configure via
-    environment variables or .env file.
+    Render the settings page with configurable alert rules.
     """
     st.title("⚙️ Settings")
     st.markdown("---")
 
-    st.info(
-        "📖 Settings are currently read-only. Configure via environment "
-        "variables or .env file."
-    )
+    # In-App Alert Configuration (Section 4.2)
+    st.subheader("🔔 Alert Configuration")
+    
+    with st.expander("🛠️ Alert Rules & Preferences", expanded=True):
+        st.markdown("""
+        **Note:** These rules control real-time alerts only. 
+        All arbitrage signals are still tracked and logged in the History view regardless of these settings.
+        """)
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            config.alert_min_roi = st.number_input(
+                "Minimum ROI Threshold (%)",
+                min_value=0.0,
+                max_value=100.0,
+                value=config.alert_min_roi,
+                help="Only notify if ROI is above this percentage."
+            )
+            config.alert_min_liquidity = st.number_input(
+                "Minimum Liquidity Threshold ($)",
+                min_value=0.0,
+                value=config.alert_min_liquidity,
+                help="Only notify if market liquidity is above this amount."
+            )
+            
+        with col2:
+            config.alert_banner_enabled = st.toggle(
+                "Enable Notification Banners",
+                value=config.alert_banner_enabled,
+                help="Show a temporary toast notification when a new signal arrives."
+            )
+            config.alert_sound_enabled = st.toggle(
+                "Enable Notification Sound",
+                value=config.alert_sound_enabled,
+                help="Play a sound when a new signal arrives."
+            )
+
+        # Category filtering (simplified for now)
+        st.multiselect(
+            "Ignored Categories",
+            ["Politics", "Crypto", "Sports", "Entertainment", "Economy"],
+            default=config.alert_ignored_categories,
+            on_change=lambda: setattr(config, 'alert_ignored_categories', st.session_state.ignored_cats) if 'ignored_cats' in st.session_state else None,
+            key="ignored_cats"
+        )
+        
+        st.caption("Settings changed here persist for this application run.")
+
+    st.markdown("---")
+
+    # Outbound Event Queue Debug (Section 4.3)
+    with st.expander("📡 Outbound Event Queue (Future-Safe)", expanded=False):
+        st.markdown("""
+        This queue stores events for future outbound delivery systems (Webhooks, Push, Email).
+        Currently, events are stored internally only.
+        """)
+        
+        from app.core.notifications import get_notification_service
+        notification_service = get_notification_service()
+        
+        import sqlite3
+        conn = sqlite3.connect(config.db_path)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM outbound_queue ORDER BY created_at DESC LIMIT 10")
+        queue_items = [dict(row) for row in cursor.fetchall()]
+        conn.close()
+        
+        if queue_items:
+            st.table(queue_items)
+        else:
+            st.info("No outbound events in queue.")
+
+    st.markdown("---")
 
     # API Configuration
     st.subheader("API Configuration")
+    
+    st.info(
+        "📖 The following settings are loaded from .env and are read-only."
+    )
 
     col1, col2 = st.columns(2)
 

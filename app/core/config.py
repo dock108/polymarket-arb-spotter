@@ -72,6 +72,43 @@ class Config:
     # Operational Mode
     mode: Literal["mock", "live"] = "mock"
 
+    # Default Stake for profit calculations
+    default_stake: float = 100.0
+
+    # Polymarket Base URL for external links
+    polymarket_base_url: str = "https://polymarket.com/event/"
+
+    # ROI Highlighting Thresholds
+    roi_high_threshold: float = 12.0
+    roi_medium_threshold: float = 6.0
+
+    # Alert Rules (Section 4.2)
+    alert_min_roi: float = 5.0
+    alert_min_liquidity: float = 100.0
+    alert_ignored_categories: list = None # Will be initialized in __post_init__
+
+    # UI Preferences (Section 4.1)
+    alert_sound_enabled: bool = True
+    alert_banner_enabled: bool = True
+
+    # Volatility Interpretation Messages
+    volatility_messages: dict = None
+
+    def __post_init__(self):
+        if self.alert_ignored_categories is None:
+            self.alert_ignored_categories = []
+        
+        if self.volatility_messages is None:
+            self.volatility_messages = {
+                "Very Low": "Low volatility — fewer opportunities, but more stable entries.",
+                "Low": "Low volatility — stable pricing environment.",
+                "Medium": "Moderate volatility — decent signal flow with manageable swings.",
+                "Moderate": "Moderate volatility — decent signal flow with manageable swings.",
+                "High": "High volatility — more arbitrage appears, but timing risk increases.",
+                "Very High": "Extreme volatility — many false signals and rapid reversals possible.",
+                "Extreme": "Extreme volatility — many false signals and rapid reversals possible.",
+            }
+
     @classmethod
     def from_env(cls) -> "Config":
         """

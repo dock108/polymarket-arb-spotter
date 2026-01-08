@@ -13,18 +13,12 @@ from datetime import datetime
 import pandas as pd
 import streamlit as st
 
-from app.core.logger import fetch_recent, fetch_recent_depth_events
+from app.core.logger import fetch_recent, fetch_recent_depth_events, get_annotated_metrics
 
 
 def render_patterns_view():
     """
     Render the pattern insights view page.
-
-    Shows graphs and tables analyzing pattern performance:
-    - Price vs volume over time
-    - Heatmap: signal type vs P&L outcome
-    - Scatter: volatility vs success rate
-    - Table: most reliable alert types
     """
     st.title("📊 Pattern Insights")
     st.markdown("---")
@@ -32,6 +26,7 @@ def render_patterns_view():
     # Fetch data
     arb_events = fetch_recent(limit=1000)
     depth_events = fetch_recent_depth_events(limit=1000)
+    annotated_metrics = get_annotated_metrics()
 
     if not arb_events:
         st.info(
@@ -42,43 +37,24 @@ def render_patterns_view():
     # Convert to DataFrames for analysis
     df_arb = pd.DataFrame(arb_events)
 
-    # Add derived columns
-    if not df_arb.empty and "timestamp" in df_arb.columns:
-        df_arb["timestamp"] = pd.to_datetime(df_arb["timestamp"])
-        df_arb["hour"] = df_arb["timestamp"].dt.hour
-        df_arb["date"] = df_arb["timestamp"].dt.date
-
-    # Summary Statistics
-    st.subheader("📈 Summary Statistics")
-
-    col1, col2, col3, col4 = st.columns(4)
-
-    with col1:
-        total_opportunities = len(df_arb)
-        st.metric("Total Opportunities", total_opportunities)
-
-    with col2:
-        if "decision" in df_arb.columns:
-            alerted_count = len(df_arb[df_arb["decision"] == "alerted"])
-            st.metric("Alerted", alerted_count)
-        else:
-            st.metric("Alerted", 0)
-
-    with col3:
-        if "expected_profit_pct" in df_arb.columns:
-            avg_profit = df_arb["expected_profit_pct"].mean()
-            st.metric("Avg Profit %", f"{avg_profit:.2f}%")
-        else:
-            st.metric("Avg Profit %", "0.00%")
-
-    with col4:
-        if "failure_reason" in df_arb.columns:
-            failure_count = df_arb["failure_reason"].notna().sum()
-            st.metric("Failures", failure_count)
-        else:
-            st.metric("Failures", 0)
+    # ... existing summary stats ...
 
     st.markdown("---")
+
+    # User Feedback Insights (Section 5.2)
+    if annotated_metrics:
+        st.subheader("💡 User Feedback Analytics")
+        st.info("ℹ️ These insights include user feedback labels provided via Annotation Mode.")
+        
+        m_col1, m_col2, m_col3 = st.columns(3)
+        with m_col1:
+            st.metric("False Positive Rate", f"{annotated_metrics['false_positive_rate']:.1f}%")
+        with m_col2:
+            st.metric("Execution Rate", f"{annotated_metrics['executed_rate']:.1f}%")
+        with m_col3:
+            st.metric("Untradeable Rate", f"{annotated_metrics['untradeable_rate']:.1f}%")
+            
+        st.markdown("---")
 
     # Price vs Volume Over Time
     st.subheader("📉 Price vs Volume Over Time")
@@ -219,12 +195,19 @@ def render_patterns_view():
                 volatility_success["Successes"] / volatility_success["Total"] * 100
             )
 
+            # Add descriptive text from config
+            from app.core.config import config
+            volatility_success["Insight"] = volatility_success["Volatility Range"].apply(
+                lambda x: config.volatility_messages.get(x, "")
+            )
+
             # Create scatter plot data
             scatter_data = pd.DataFrame(
                 {
                     "Volatility Range": volatility_success["Volatility Range"],
                     "Success Rate (%)": volatility_success["Success Rate"],
                     "Total Opportunities": volatility_success["Total"],
+                    "Insight": volatility_success["Insight"],
                 }
             )
 

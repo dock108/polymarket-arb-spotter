@@ -1,784 +1,77 @@
 """
 Logging configuration and utilities for the Polymarket Arbitrage Spotter.
-
-Includes structured logging for arbitrage events using SQLite database.
+Maintains the public API for logging and proxying to specialized storage modules.
 """
 
-import json
 import logging
 import sys
 import threading
 from datetime import datetime
 from pathlib import Path
 from typing import Optional, List, Dict, Any, Callable
-from sqlite_utils import Database
 
+# Import proxy targets from specialized modules
+from app.core.event_log import (
+    init_db,
+    log_event,
+    fetch_recent,
+    log_price_alert_event,
+    fetch_recent_price_alerts,
+    fetch_price_alert_events,
+    log_depth_event,
+    fetch_recent_depth_events,
+    fetch_depth_events,
+    save_history_label,
+    fetch_history_labels,
+    delete_history_label,
+    save_user_annotation,
+    fetch_user_annotations,
+    delete_user_annotation,
+    log_wallet_alert,
+    fetch_recent_wallet_alerts,
+    get_annotated_metrics,
+    _DB_PATH
+)
 
 def setup_logger(
     name: str = "polymarket_arb", level: str = "INFO", log_file: Optional[str] = None
 ) -> logging.Logger:
     """
     Setup and configure logger for the application.
-
-    Args:
-        name: Logger name
-        level: Log level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
-        log_file: Optional path to log file
-
-    Returns:
-        Configured logger instance
     """
     logger = logging.getLogger(name)
     logger.setLevel(getattr(logging, level.upper()))
 
-    # Console handler
-    console_handler = logging.StreamHandler(sys.stdout)
-    console_handler.setLevel(logging.DEBUG)
-    console_format = logging.Formatter(
-        "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-    )
-    console_handler.setFormatter(console_format)
-    logger.addHandler(console_handler)
+    # Avoid adding multiple handlers if setup_logger is called multiple times
+    if not logger.handlers:
+        # Console handler
+        console_handler = logging.StreamHandler(sys.stdout)
+        console_handler.setLevel(logging.DEBUG)
+        console_format = logging.Formatter(
+            "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+        )
+        console_handler.setFormatter(console_format)
+        logger.addHandler(console_handler)
 
-    # File handler
-    if log_file:
-        log_path = Path(log_file)
-        log_path.parent.mkdir(parents=True, exist_ok=True)
-        file_handler = logging.FileHandler(log_file)
-        file_handler.setLevel(logging.DEBUG)
-        file_handler.setFormatter(console_format)
-        logger.addHandler(file_handler)
+        # File handler
+        if log_file:
+            log_path = Path(log_file)
+            log_path.parent.mkdir(parents=True, exist_ok=True)
+            file_handler = logging.FileHandler(log_file)
+            file_handler.setLevel(logging.DEBUG)
+            file_handler.setFormatter(console_format)
+            logger.addHandler(file_handler)
 
     return logger
-
 
 # Default logger instance
 logger = setup_logger()
 
+# --- Heartbeat monitoring ---
 
-# Database path for arbitrage event logging
-_DB_PATH = "data/arb_logs.sqlite"
-
-
-def init_db(db_path: str = _DB_PATH) -> None:
-    """
-    Initialize the SQLite database schema for arbitrage event logging.
-
-    Creates the arbitrage_events table with the following schema:
-    - timestamp (datetime): When the arbitrage happened
-    - market_id (string): Unique identifier of the market
-    - market_name (string): Name of the market
-    - yes_price (float): Price for the 'yes' option
-    - no_price (float): Price for the 'no' option
-    - sum (float): Sum of prices
-    - expected_profit_pct (float): Expected profit percentage
-    - mode (string): Mode of operation ("mock" or "live")
-    - decision (string): Decision made ("alerted" or "ignored")
-    - mock_result (string | null): Result of the mock trade
-    - failure_reason (string | null): Reason for any failure
-    - latency_ms (integer): Latency in milliseconds
-
-    Args:
-        db_path: Path to the SQLite database file
-    """
-    # Ensure parent directory exists
-    Path(db_path).parent.mkdir(parents=True, exist_ok=True)
-
-    db = Database(db_path)
-
-    # Create table with schema if it doesn't exist
-    if "arbitrage_events" not in db.table_names():
-        db["arbitrage_events"].create(
-            {
-                "timestamp": str,
-                "market_id": str,
-                "market_name": str,
-                "yes_price": float,
-                "no_price": float,
-                "sum": float,
-                "expected_profit_pct": float,
-                "mode": str,
-                "decision": str,
-                "mock_result": str,
-                "failure_reason": str,
-                "latency_ms": int,
-            },
-            pk="id",
-        )
-
-    # Create price_alert_events table with schema if it doesn't exist
-    if "price_alert_events" not in db.table_names():
-        db["price_alert_events"].create(
-            {
-                "timestamp": str,
-                "alert_id": str,
-                "market_id": str,
-                "direction": str,
-                "target_price": float,
-                "trigger_price": float,
-                "mode": str,
-                "latency_ms": int,
-            },
-            pk="id",
-        )
-
-    # Create depth_events table with schema if it doesn't exist
-    if "depth_events" not in db.table_names():
-        db["depth_events"].create(
-            {
-                "timestamp": str,
-                "market_id": str,
-                "metrics": str,  # JSON string containing depth metrics
-                "signal_type": str,
-                "threshold_hit": str,
-                "mode": str,
-            },
-            pk="id",
-        )
-
-    # Create history_labels table with schema if it doesn't exist
-    if "history_labels" not in db.table_names():
-        db["history_labels"].create(
-            {
-                "timestamp": str,
-                "market_id": str,
-                "label_type": str,
-                "notes": str,
-            },
-            pk="id",
-        )
-
-    # Create wallet_alerts table with schema if it doesn't exist
-    if "wallet_alerts" not in db.table_names():
-        db["wallet_alerts"].create(
-            {
-                "timestamp": str,
-                "wallet": str,
-                "market_id": str,
-                "bet_size": float,
-                "classification": str,
-                "signal_type": str,
-                "profile_url": str,
-                "evidence": str,  # JSON string containing signal evidence
-            },
-            pk="id",
-        )
-
-
-def log_event(data: Dict[str, Any], db_path: str = _DB_PATH) -> None:
-    """
-    Log an arbitrage event to the database.
-
-    Args:
-        data: Dictionary containing the arbitrage event data with keys:
-            - timestamp (datetime or str): When the arbitrage happened
-            - market_id (str): Unique identifier of the market
-            - market_name (str): Name of the market
-            - yes_price (float): Price for the 'yes' option
-            - no_price (float): Price for the 'no' option
-            - sum (float): Sum of prices
-            - expected_profit_pct (float): Expected profit percentage
-            - mode (str): Mode of operation ("mock" or "live")
-            - decision (str): Decision made ("alerted" or "ignored")
-            - mock_result (str | None): Result of the mock trade
-            - failure_reason (str | None): Reason for any failure
-            - latency_ms (int): Latency in milliseconds
-        db_path: Path to the SQLite database file
-    """
-    try:
-        db = Database(db_path)
-
-        # Convert timestamp to string if it's a datetime object
-        event_data = data.copy()
-        if hasattr(event_data.get("timestamp"), "isoformat"):
-            event_data["timestamp"] = event_data["timestamp"].isoformat()
-
-        db["arbitrage_events"].insert(event_data)
-
-    except Exception as e:
-        logger.error(f"Error logging event to database: {e}", exc_info=True)
-        # Don't re-raise to allow continued processing
-
-
-def _get_table_columns(db: Database, table_name: str) -> List[str]:
-    """
-    Get column names for a table.
-
-    Args:
-        db: Database instance
-        table_name: Name of the table. Must be one of: 'arbitrage_events',
-                   'price_alert_events', 'depth_events', 'history_labels',
-                   'wallet_alerts'
-
-    Returns:
-        List of column names
-
-    Raises:
-        ValueError: If table_name is not in the allowed list
-    """
-    # Whitelist of allowed table names to prevent SQL injection
-    allowed_tables = {
-        "arbitrage_events",
-        "price_alert_events",
-        "depth_events",
-        "history_labels",
-        "wallet_alerts",
-    }
-    if table_name not in allowed_tables:
-        raise ValueError(f"Invalid table name: {table_name}")
-
-    columns = [
-        col[0] for col in db.execute(f"SELECT * FROM {table_name} LIMIT 0").description
-    ]
-    return columns
-
-
-def fetch_recent(limit: int = 100, db_path: str = _DB_PATH) -> List[Dict[str, Any]]:
-    """
-    Fetch the most recent arbitrage events from the database.
-
-    Args:
-        limit: Maximum number of entries to retrieve (default: 100)
-        db_path: Path to the SQLite database file
-
-    Returns:
-        List of dictionaries containing the arbitrage event data,
-        ordered by timestamp in descending order (most recent first)
-    """
-    try:
-        db = Database(db_path)
-
-        # Check if table exists
-        if "arbitrage_events" not in db.table_names():
-            return []
-
-        # Fetch recent entries ordered by timestamp descending using SQL
-        rows = db.execute(
-            "SELECT * FROM arbitrage_events ORDER BY timestamp DESC LIMIT ?", [limit]
-        ).fetchall()
-
-        # Convert to list of dictionaries
-        if not rows:
-            return []
-
-        # Get column names
-        columns = _get_table_columns(db, "arbitrage_events")
-
-        return [dict(zip(columns, row)) for row in rows]
-
-    except Exception as e:
-        logger.error(f"Error fetching recent events: {e}", exc_info=True)
-        return []
-
-
-def log_price_alert_event(data: Dict[str, Any], db_path: str = _DB_PATH) -> None:
-    """
-    Log a price alert event to the database.
-
-    Args:
-        data: Dictionary containing the price alert event data with keys:
-            - timestamp (datetime or str): When the alert was triggered
-            - alert_id (str): Unique identifier of the alert
-            - market_id (str): Unique identifier of the market
-            - direction (str): Direction of the alert ("above" or "below")
-            - target_price (float): Target price that triggered the alert
-            - trigger_price (float): Actual price when alert was triggered
-            - mode (str): Mode of operation ("mock" or "live")
-            - latency_ms (int): Latency in milliseconds
-        db_path: Path to the SQLite database file
-    """
-    try:
-        db = Database(db_path)
-
-        # Convert timestamp to string if it's a datetime object
-        event_data = data.copy()
-        if hasattr(event_data.get("timestamp"), "isoformat"):
-            event_data["timestamp"] = event_data["timestamp"].isoformat()
-
-        db["price_alert_events"].insert(event_data)
-
-    except Exception as e:
-        logger.error(f"Error logging price alert event to database: {e}", exc_info=True)
-        # Don't re-raise to allow continued processing
-
-
-def fetch_recent_price_alerts(
-    limit: int = 100, db_path: str = _DB_PATH
-) -> List[Dict[str, Any]]:
-    """
-    Fetch the most recent price alert events from the database.
-
-    Args:
-        limit: Maximum number of entries to retrieve (default: 100)
-        db_path: Path to the SQLite database file
-
-    Returns:
-        List of dictionaries containing the price alert event data,
-        ordered by timestamp in descending order (most recent first)
-    """
-    try:
-        db = Database(db_path)
-
-        # Check if table exists
-        if "price_alert_events" not in db.table_names():
-            return []
-
-        # Fetch recent entries ordered by timestamp descending using SQL
-        rows = db.execute(
-            "SELECT * FROM price_alert_events ORDER BY timestamp DESC LIMIT ?",
-            [limit],
-        ).fetchall()
-
-        # Convert to list of dictionaries
-        if not rows:
-            return []
-
-        # Get column names
-        columns = _get_table_columns(db, "price_alert_events")
-
-        return [dict(zip(columns, row)) for row in rows]
-
-    except Exception as e:
-        logger.error(f"Error fetching recent price alert events: {e}", exc_info=True)
-        return []
-
-
-def fetch_price_alert_events(
-    market_id: Optional[str] = None,
-    start: Optional[str] = None,
-    end: Optional[str] = None,
-    limit: int = 1000,
-    db_path: str = _DB_PATH,
-) -> List[Dict[str, Any]]:
-    """
-    Fetch price alert events from the database with filtering options.
-
-    Args:
-        market_id: Optional market ID to filter by
-        start: Optional start timestamp (ISO format string)
-        end: Optional end timestamp (ISO format string)
-        limit: Maximum number of entries to retrieve (default: 1000)
-        db_path: Path to the SQLite database file
-
-    Returns:
-        List of dictionaries containing the price alert event data,
-        ordered by timestamp in descending order (most recent first)
-    """
-    try:
-        db = Database(db_path)
-
-        # Check if table exists
-        if "price_alert_events" not in db.table_names():
-            return []
-
-        # Build query
-        query = "SELECT * FROM price_alert_events"
-        params: List[Any] = []
-        where_clauses = []
-
-        if market_id:
-            where_clauses.append("market_id = ?")
-            params.append(market_id)
-
-        if start:
-            where_clauses.append("timestamp >= ?")
-            params.append(start)
-
-        if end:
-            where_clauses.append("timestamp <= ?")
-            params.append(end)
-
-        if where_clauses:
-            query += " WHERE " + " AND ".join(where_clauses)
-
-        query += " ORDER BY timestamp DESC LIMIT ?"
-        params.append(limit)
-
-        rows = db.execute(query, params).fetchall()
-
-        if not rows:
-            return []
-
-        # Get column names
-        columns = _get_table_columns(db, "price_alert_events")
-
-        return [dict(zip(columns, row)) for row in rows]
-
-    except Exception as e:
-        logger.error(f"Error fetching price alert events: {e}", exc_info=True)
-        return []
-
-
-def log_depth_event(data: Dict[str, Any], db_path: str = _DB_PATH) -> None:
-    """
-    Log a depth event to the database.
-
-    Args:
-        data: Dictionary containing the depth event data with keys:
-            - timestamp (datetime or str): When the depth event occurred
-            - market_id (str): Unique identifier of the market
-            - metrics (dict): Dictionary containing depth metrics (will be JSON serialized)
-            - signal_type (str): Type of depth signal (e.g., "thin_depth", "large_gap", "strong_imbalance")
-            - threshold_hit (str): Description of the threshold that was hit
-            - mode (str): Mode of operation ("mock" or "live")
-        db_path: Path to the SQLite database file
-    """
-    try:
-        db = Database(db_path)
-
-        # Convert timestamp to string if it's a datetime object
-        event_data = data.copy()
-        if hasattr(event_data.get("timestamp"), "isoformat"):
-            event_data["timestamp"] = event_data["timestamp"].isoformat()
-
-        # Serialize metrics dict to JSON string if it's a dict
-        if isinstance(event_data.get("metrics"), dict):
-            event_data["metrics"] = json.dumps(event_data["metrics"])
-
-        db["depth_events"].insert(event_data)
-
-    except Exception as e:
-        logger.error(f"Error logging depth event to database: {e}", exc_info=True)
-        # Don't re-raise to allow continued processing
-
-
-def fetch_recent_depth_events(
-    limit: int = 100, db_path: str = _DB_PATH
-) -> List[Dict[str, Any]]:
-    """
-    Fetch the most recent depth events from the database.
-
-    Args:
-        limit: Maximum number of entries to retrieve (default: 100)
-        db_path: Path to the SQLite database file
-
-    Returns:
-        List of dictionaries containing the depth event data,
-        ordered by timestamp in descending order (most recent first).
-        The 'metrics' field is deserialized from JSON to a dictionary.
-    """
-    try:
-        db = Database(db_path)
-
-        # Check if table exists
-        if "depth_events" not in db.table_names():
-            return []
-
-        # Fetch recent entries ordered by timestamp descending using SQL
-        rows = db.execute(
-            "SELECT * FROM depth_events ORDER BY timestamp DESC LIMIT ?",
-            [limit],
-        ).fetchall()
-
-        # Convert to list of dictionaries
-        if not rows:
-            return []
-
-        # Get column names
-        columns = _get_table_columns(db, "depth_events")
-
-        results = []
-        for row in rows:
-            row_dict = dict(zip(columns, row))
-            # Deserialize metrics JSON string to dict
-            if row_dict.get("metrics"):
-                try:
-                    row_dict["metrics"] = json.loads(row_dict["metrics"])
-                except (json.JSONDecodeError, TypeError):
-                    pass  # Keep as string if deserialization fails
-            results.append(row_dict)
-
-        return results
-
-    except Exception as e:
-        logger.error(f"Error fetching recent depth events: {e}", exc_info=True)
-        return []
-
-
-def fetch_depth_events(
-    market_id: Optional[str] = None,
-    start: Optional[str] = None,
-    end: Optional[str] = None,
-    limit: int = 1000,
-    db_path: str = _DB_PATH,
-) -> List[Dict[str, Any]]:
-    """
-    Fetch depth events from the database with filtering options.
-
-    Args:
-        market_id: Optional market ID to filter by
-        start: Optional start timestamp (ISO format string)
-        end: Optional end timestamp (ISO format string)
-        limit: Maximum number of entries to retrieve (default: 1000)
-        db_path: Path to the SQLite database file
-
-    Returns:
-        List of dictionaries containing the depth event data,
-        ordered by timestamp in descending order (most recent first).
-        The 'metrics' field is deserialized from JSON to a dictionary.
-    """
-    try:
-        db = Database(db_path)
-
-        # Check if table exists
-        if "depth_events" not in db.table_names():
-            return []
-
-        # Build query
-        query = "SELECT * FROM depth_events"
-        params: List[Any] = []
-        where_clauses = []
-
-        if market_id:
-            where_clauses.append("market_id = ?")
-            params.append(market_id)
-
-        if start:
-            where_clauses.append("timestamp >= ?")
-            params.append(start)
-
-        if end:
-            where_clauses.append("timestamp <= ?")
-            params.append(end)
-
-        if where_clauses:
-            query += " WHERE " + " AND ".join(where_clauses)
-
-        query += " ORDER BY timestamp DESC LIMIT ?"
-        params.append(limit)
-
-        rows = db.execute(query, params).fetchall()
-
-        if not rows:
-            return []
-
-        # Get column names
-        columns = _get_table_columns(db, "depth_events")
-
-        results = []
-        for row in rows:
-            row_dict = dict(zip(columns, row))
-            # Deserialize metrics JSON string to dict
-            if row_dict.get("metrics"):
-                try:
-                    row_dict["metrics"] = json.loads(row_dict["metrics"])
-                except (json.JSONDecodeError, TypeError):
-                    pass  # Keep as string if deserialization fails
-            results.append(row_dict)
-
-        return results
-
-    except Exception as e:
-        logger.error(f"Error fetching depth events: {e}", exc_info=True)
-        return []
-
-
-def save_history_label(data: Dict[str, Any], db_path: str = _DB_PATH) -> None:
-    """
-    Save a history label to the database.
-
-    Args:
-        data: Dictionary containing the label data with keys:
-            - timestamp (datetime or str): When the label was created
-            - market_id (str): Unique identifier of the market
-            - label_type (str): Type of label ("news-driven move", "whale entry", "arb collapse", "false signal")
-            - notes (str): Optional notes for the label
-        db_path: Path to the SQLite database file
-    """
-    try:
-        db = Database(db_path)
-
-        # Convert timestamp to string if it's a datetime object
-        label_data = data.copy()
-        if hasattr(label_data.get("timestamp"), "isoformat"):
-            label_data["timestamp"] = label_data["timestamp"].isoformat()
-
-        db["history_labels"].insert(label_data)
-
-    except Exception as e:
-        logger.error(f"Error saving history label to database: {e}", exc_info=True)
-
-
-def fetch_history_labels(
-    market_id: Optional[str] = None,
-    start: Optional[str] = None,
-    end: Optional[str] = None,
-    limit: int = 1000,
-    db_path: str = _DB_PATH,
-) -> List[Dict[str, Any]]:
-    """
-    Fetch history labels from the database.
-
-    Args:
-        market_id: Optional market ID to filter by
-        start: Optional start timestamp (ISO format string)
-        end: Optional end timestamp (ISO format string)
-        limit: Maximum number of entries to retrieve (default: 1000)
-        db_path: Path to the SQLite database file
-
-    Returns:
-        List of dictionaries containing the label data,
-        ordered by timestamp in descending order (most recent first)
-    """
-    try:
-        db = Database(db_path)
-
-        # Check if table exists
-        if "history_labels" not in db.table_names():
-            return []
-
-        # Build query
-        query = "SELECT * FROM history_labels"
-        params: List[Any] = []
-        where_clauses = []
-
-        if market_id:
-            where_clauses.append("market_id = ?")
-            params.append(market_id)
-
-        if start:
-            where_clauses.append("timestamp >= ?")
-            params.append(start)
-
-        if end:
-            where_clauses.append("timestamp <= ?")
-            params.append(end)
-
-        if where_clauses:
-            query += " WHERE " + " AND ".join(where_clauses)
-
-        query += " ORDER BY timestamp DESC LIMIT ?"
-        params.append(limit)
-
-        rows = db.execute(query, params).fetchall()
-
-        if not rows:
-            return []
-
-        # Get column names
-        columns = _get_table_columns(db, "history_labels")
-
-        return [dict(zip(columns, row)) for row in rows]
-
-    except Exception as e:
-        logger.error(f"Error fetching history labels: {e}", exc_info=True)
-        return []
-
-
-def log_wallet_alert(data: Dict[str, Any], db_path: str = _DB_PATH) -> None:
-    """
-    Log a wallet alert event to the database.
-
-    Args:
-        data: Dictionary containing the wallet alert data with keys:
-            - timestamp (datetime or str): When the alert was triggered
-            - wallet (str): Wallet address
-            - market_id (str): Unique identifier of the market
-            - bet_size (float): Bet size associated with the alert
-            - classification (str): Wallet classification (fresh/whale/pro)
-            - signal_type (str): Wallet signal type
-            - profile_url (str): Polymarket profile URL
-            - evidence (dict | str): Evidence payload (JSON serialized if dict)
-        db_path: Path to the SQLite database file
-    """
-    try:
-        db = Database(db_path)
-
-        event_data = data.copy()
-        if hasattr(event_data.get("timestamp"), "isoformat"):
-            event_data["timestamp"] = event_data["timestamp"].isoformat()
-
-        if isinstance(event_data.get("evidence"), dict):
-            event_data["evidence"] = json.dumps(event_data["evidence"])
-
-        db["wallet_alerts"].insert(event_data)
-
-    except Exception as e:
-        logger.error(f"Error logging wallet alert to database: {e}", exc_info=True)
-
-
-def fetch_recent_wallet_alerts(
-    limit: int = 100, db_path: str = _DB_PATH
-) -> List[Dict[str, Any]]:
-    """
-    Fetch the most recent wallet alerts from the database.
-
-    Args:
-        limit: Maximum number of entries to retrieve (default: 100)
-        db_path: Path to the SQLite database file
-
-    Returns:
-        List of dictionaries containing the wallet alert data,
-        ordered by timestamp in descending order (most recent first).
-        The 'evidence' field is deserialized from JSON to a dictionary.
-    """
-    try:
-        db = Database(db_path)
-
-        if "wallet_alerts" not in db.table_names():
-            return []
-
-        rows = db.execute(
-            "SELECT * FROM wallet_alerts ORDER BY timestamp DESC LIMIT ?",
-            [limit],
-        ).fetchall()
-
-        if not rows:
-            return []
-
-        columns = _get_table_columns(db, "wallet_alerts")
-
-        results = []
-        for row in rows:
-            row_dict = dict(zip(columns, row))
-            if row_dict.get("evidence"):
-                try:
-                    row_dict["evidence"] = json.loads(row_dict["evidence"])
-                except (json.JSONDecodeError, TypeError):
-                    pass
-            results.append(row_dict)
-
-        return results
-
-    except Exception as e:
-        logger.error(f"Error fetching recent wallet alerts: {e}", exc_info=True)
-        return []
-
-
-def delete_history_label(label_id: int, db_path: str = _DB_PATH) -> bool:
-    """
-    Delete a history label from the database.
-
-    Args:
-        label_id: ID of the label to delete
-        db_path: Path to the SQLite database file
-
-    Returns:
-        True if deletion was successful, False otherwise
-    """
-    try:
-        db = Database(db_path)
-
-        # Check if table exists
-        if "history_labels" not in db.table_names():
-            return False
-
-        db.execute("DELETE FROM history_labels WHERE id = ?", [label_id])
-        db.conn.commit()  # Explicitly commit the deletion
-        return True
-
-    except Exception as e:
-        logger.error(f"Error deleting history label: {e}", exc_info=True)
-        return False
-
-
-# Heartbeat monitoring
 class HealthHeartbeat:
     """
     Health heartbeat monitor that logs periodic health status.
-
-    This class runs a background thread that logs a heartbeat message
-    at regular intervals to indicate the system is running and healthy.
     """
 
     def __init__(
@@ -787,14 +80,7 @@ class HealthHeartbeat:
         callback: Optional[Callable[[], Dict[str, Any]]] = None,
         logger_instance: Optional[logging.Logger] = None,
     ):
-        """
-        Initialize health heartbeat monitor.
-
-        Args:
-            interval: Interval in seconds between heartbeat logs (default: 60)
-            callback: Optional callback function that returns health metrics dict
-            logger_instance: Logger to use (defaults to module logger)
-        """
+        """Initialize health heartbeat monitor."""
         self.interval = interval
         self.callback = callback
         self.logger = logger_instance or logger
@@ -829,11 +115,10 @@ class HealthHeartbeat:
         self.logger.info("Health heartbeat stopped")
 
     def _run(self) -> None:
-        """Main heartbeat loop (runs in background thread)."""
+        """Main heartbeat loop."""
         try:
             while self._running and not self._stop_event.is_set():
                 try:
-                    # Get health metrics from callback if provided
                     metrics = {}
                     if self.callback:
                         try:
@@ -841,19 +126,13 @@ class HealthHeartbeat:
                         except Exception as e:
                             self.logger.error(f"Error getting health metrics: {e}")
 
-                    # Log heartbeat
                     timestamp = datetime.now().isoformat()
-                    if metrics:
-                        self.logger.info(
-                            f"HEARTBEAT [{timestamp}] - Status: healthy - Metrics: {metrics}"
-                        )
-                    else:
-                        self.logger.info(f"HEARTBEAT [{timestamp}] - Status: healthy")
+                    self.logger.info(f"HEARTBEAT [{timestamp}] - Status: healthy" + 
+                                     (f" - Metrics: {metrics}" if metrics else ""))
 
                 except Exception as e:
                     self.logger.error(f"Error in heartbeat loop: {e}", exc_info=True)
 
-                # Wait for next heartbeat (or stop signal)
                 self._stop_event.wait(timeout=self.interval)
 
         except Exception as e:
@@ -861,40 +140,12 @@ class HealthHeartbeat:
         finally:
             self._running = False
 
-    def __enter__(self):
-        """Context manager entry."""
-        self.start()
-        return self
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        """Context manager exit."""
-        self.stop()
-        return False
-
-
 def start_heartbeat(
     interval: int = 60,
     callback: Optional[Callable[[], Dict[str, Any]]] = None,
     logger_instance: Optional[logging.Logger] = None,
 ) -> HealthHeartbeat:
-    """
-    Start a health heartbeat monitor.
-
-    This is a convenience function to create and start a heartbeat monitor.
-
-    Args:
-        interval: Interval in seconds between heartbeat logs (default: 60)
-        callback: Optional callback function that returns health metrics dict
-        logger_instance: Logger to use (defaults to module logger)
-
-    Returns:
-        HealthHeartbeat instance (already started)
-
-    Example:
-        >>> heartbeat = start_heartbeat(interval=60)
-        >>> # ... do work ...
-        >>> heartbeat.stop()
-    """
+    """Convenience function to create and start a heartbeat monitor."""
     heartbeat = HealthHeartbeat(
         interval=interval, callback=callback, logger_instance=logger_instance
     )

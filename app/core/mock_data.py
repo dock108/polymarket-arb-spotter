@@ -48,6 +48,10 @@ class MockDataGenerator:
         self.market_counter += 1
         market_id = f"market_{self.market_counter}"
 
+        # Category list for mock markets
+        categories = ["Politics", "Crypto", "Sports", "Entertainment", "Economy"]
+        category = random.choice(categories)
+
         # Generate binary outcome market
         yes_price = random.uniform(0.3, 0.7)
         # Introduce small inefficiency but keep within bounds
@@ -58,6 +62,7 @@ class MockDataGenerator:
             "id": market_id,
             "name": f"Mock Market {self.market_counter}",
             "question": f"Will event {self.market_counter} occur?",
+            "category": category,
             "outcomes": [
                 {
                     "name": "Yes",

@@ -8,6 +8,14 @@ Usage:
 
 import streamlit as st
 
+# Page configuration MUST be the first Streamlit command
+st.set_page_config(
+    page_title="Polymarket Arb Spotter",
+    page_icon="🎯",
+    layout="wide",
+    initial_sidebar_state="expanded",
+)
+
 from app.ui.dashboard import render_dashboard
 from app.ui.history_view import render_history_view
 from app.ui.settings_view import render_settings_view
@@ -30,47 +38,9 @@ def main():
     """Main application entry point."""
     logger.info("Starting Polymarket Arbitrage Spotter")
 
-    # Page configuration
-    st.set_page_config(
-        page_title="Polymarket Arb Spotter",
-        page_icon="🎯",
-        layout="wide",
-        initial_sidebar_state="expanded",
-    )
-
-    # Sidebar navigation
-    st.sidebar.title("🎯 Polymarket Arb Spotter")
-    st.sidebar.markdown("---")
-
-    page = st.sidebar.radio("Navigation", ["Dashboard", "History", "Settings"], index=0)
-
-    st.sidebar.markdown("---")
-
-    # Status indicators
-    st.sidebar.subheader("Status")
-    st.sidebar.success("🟢 System Online")
-    st.sidebar.info("ℹ️ Monitoring: Paused")
-
-    st.sidebar.markdown("---")
-
-    # Info
-    st.sidebar.markdown("### About")
-    st.sidebar.markdown(
-        "Polymarket Arbitrage Spotter detects arbitrage opportunities "
-        "in prediction markets. This tool is for detection only - "
-        "no trading is performed."
-    )
-
-    st.sidebar.markdown("---")
-    st.sidebar.caption("Version: 0.1.0-alpha")
-
-    # Render selected page
-    if page == "Dashboard":
-        render_dashboard()
-    elif page == "History":
-        render_history_view()
-    elif page == "Settings":
-        render_settings_view()
+    # The dashboard module now handles its own internal navigation
+    # and provides a more comprehensive set of views.
+    render_dashboard()
 
 
 if __name__ == "__main__":

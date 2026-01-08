@@ -186,17 +186,7 @@ class PolymarketAPIClient:
     ) -> List[Dict[str, Any]]:
         """
         Fetch markets from Polymarket.
-
-        Args:
-            limit: Maximum number of markets to fetch (max 100)
-            offset: Offset for pagination
-            active_only: Only fetch active/open markets
-
-        Returns:
-            List of market data dictionaries
         """
-        logger.info(f"Fetching markets: limit={limit}, offset={offset}")
-
         params: Dict[str, Any] = {
             "limit": min(limit, 100),
             "offset": offset,
@@ -547,114 +537,12 @@ class PolymarketAPIClient:
         ):
             pass  # Messages are handled via callback
 
-    # Legacy method aliases for backward compatibility
-    def get_markets(
-        self,
-        limit: int = 100,
-        offset: int = 0,
-        active_only: bool = True,
-    ) -> List[Dict[str, Any]]:
-        """
-        Fetch markets from Polymarket.
-
-        Deprecated: Use fetch_markets() instead.
-        """
-        return self.fetch_markets(limit=limit, offset=offset, active_only=active_only)
-
-    def get_market_details(self, market_id: str) -> Optional[Dict[str, Any]]:
-        """
-        Fetch detailed information for a specific market.
-
-        Args:
-            market_id: Market identifier
-
-        Returns:
-            Market data dictionary or None if not found
-        """
-        logger.info(f"Fetching market details for: {market_id}")
-
-        url = f"{self.base_url}/markets/{market_id}"
-        response = self._request_with_retry("GET", url)
-
-        if response is None:
-            return None
-
-        try:
-            return response.json()
-        except json.JSONDecodeError as e:
-            logger.error(f"Failed to decode market details response: {e}")
-            return None
-
-    def get_orderbook(self, market_id: str, depth: int = 5) -> Optional[Dict[str, Any]]:
-        """
-        Fetch orderbook data for a market.
-
-        Deprecated: Use fetch_orderbook() for normalized data.
-
-        Args:
-            market_id: Market identifier
-            depth: Number of price levels to include for each side (default: 5)
-
-        Returns:
-            NormalizedOrderBook as dictionary or None if not available
-        """
-        normalized = self.fetch_orderbook(market_id, depth=depth)
-        if normalized is None:
-            return None
-        return normalized.to_dict()
-
-    def get_price_history(
-        self,
-        market_id: str,
-        start_time: Optional[datetime] = None,
-        end_time: Optional[datetime] = None,
-    ) -> List[Dict[str, Any]]:
-        """
-        Fetch historical price data for a market.
-
-        Args:
-            market_id: Market identifier
-            start_time: Start of time range
-            end_time: End of time range
-
-        Returns:
-            List of price data points
-        """
-        logger.info(f"Fetching price history for: {market_id}")
-
-        params: Dict[str, Any] = {}
-        if start_time:
-            params["startTs"] = int(start_time.timestamp())
-        if end_time:
-            params["endTs"] = int(end_time.timestamp())
-
-        url = f"{self.base_url}/markets/{market_id}/prices"
-        response = self._request_with_retry("GET", url, params=params)
-
-        if response is None:
-            return []
-
-        try:
-            data = response.json()
-            if isinstance(data, list):
-                return data
-            elif isinstance(data, dict) and "history" in data:
-                return data.get("history", [])
-            return []
-        except json.JSONDecodeError as e:
-            logger.error(f"Failed to decode price history response: {e}")
-            return []
-
     def health_check(self) -> bool:
         """
         Check if API is accessible.
-
-        Returns:
-            True if API is healthy, False otherwise
         """
         try:
             logger.info("Checking API health")
-            # Try to fetch one market to verify connectivity
             response = self._request_with_retry(
                 "GET", f"{self.base_url}/markets", params={"limit": 1}
             )

@@ -14,24 +14,11 @@ from typing import Any, Dict, List, Optional, Union
 from sqlite_utils import Database
 
 from app.core.logger import logger
+from app.core.storage import get_db, get_table_columns
 
 
 # Default database path for history store (separate from alerts)
 _HISTORY_DB_PATH = "data/market_history.db"
-
-
-def _get_db(db_path: str = _HISTORY_DB_PATH) -> Database:
-    """
-    Get a database connection, ensuring parent directory exists.
-
-    Args:
-        db_path: Path to the SQLite database file
-
-    Returns:
-        Database instance
-    """
-    Path(db_path).parent.mkdir(parents=True, exist_ok=True)
-    return Database(db_path)
 
 
 def _ensure_table(db: Database) -> None:
@@ -94,7 +81,7 @@ def append_tick(
         ... )
     """
     try:
-        db = _get_db(db_path)
+        db = get_db(db_path)
         _ensure_table(db)
 
         # Convert timestamp to ISO format string if it's a datetime
@@ -158,7 +145,7 @@ def append_ticks(
         return 0
 
     try:
-        db = _get_db(db_path)
+        db = get_db(db_path)
         _ensure_table(db)
 
         # Prepare tick data for batch insert
@@ -226,7 +213,7 @@ def get_ticks(
         ... )
     """
     try:
-        db = _get_db(db_path)
+        db = get_db(db_path)
 
         # Check if table exists
         if "market_ticks" not in db.table_names():
@@ -311,7 +298,7 @@ def prune_old(
         raise ValueError("days must be non-negative")
 
     try:
-        db = _get_db(db_path)
+        db = get_db(db_path)
 
         # Check if table exists
         if "market_ticks" not in db.table_names():
@@ -358,7 +345,7 @@ def get_tick_count(
         Number of ticks in the store
     """
     try:
-        db = _get_db(db_path)
+        db = get_db(db_path)
 
         if "market_ticks" not in db.table_names():
             return 0
@@ -390,7 +377,7 @@ def get_market_ids(
         List of unique market IDs in sorted order
     """
     try:
-        db = _get_db(db_path)
+        db = get_db(db_path)
 
         if "market_ticks" not in db.table_names():
             return []
@@ -465,7 +452,7 @@ def append_backtest_result(
         ... )
     """
     try:
-        db = _get_db(db_path)
+        db = get_db(db_path)
         _ensure_backtest_table(db)
 
         # Convert timestamp to ISO format string if it's a datetime
@@ -528,7 +515,7 @@ def get_backtest_results(
         ... )
     """
     try:
-        db = _get_db(db_path)
+        db = get_db(db_path)
 
         # Check if table exists
         if "backtest_results" not in db.table_names():
